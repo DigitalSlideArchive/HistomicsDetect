@@ -20,9 +20,8 @@ setuptools.setup(
     install_requires=[
       'matplotlib',
       'numpy',
-      'os',
       'pandas',
-      'PIL',
+      'Pillow',
       'tensorflow>=2.0',
       'tensorflow_addons',
     ],
@@ -31,7 +30,6 @@ setuptools.setup(
     classifiers=[
         'Programming Language :: Python :: 3',
         'License :: OSI Approved :: Apache Software License',
-        'Operating System :: OS Independent',
         'Topic :: Scientific/Engineering :: Artificial Intelligence',
         'Topic :: Scientific/Engineering :: Image Processing',
         'Topic :: Scientific/Engineering :: Image Recognition',
