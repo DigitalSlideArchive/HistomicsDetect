@@ -21,7 +21,7 @@ setuptools.setup(
       'matplotlib',
       'numpy',
       'pandas',
-      'PIL',
+      'Pillow',
       'tensorflow>=2.0',
       'tensorflow_addons',
     ],
