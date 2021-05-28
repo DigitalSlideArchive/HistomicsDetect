@@ -1,5 +1,71 @@
+from histomics_detect.anchors.create import create_anchors
+from histomics_detect.anchors.filter import filter_anchors
+from histomics_detect.anchors.sampling import sample_anchors
+from histomics_detect.boxes.transforms import parameterize
+from histomics_detect.boxes.transforms import unparameterize
 from histomics_detect.metrics.iou import iou
+from histomics_detect.networks.fast_rcnn import fast_rcnn
+from histomics_detect.networks.field_size import field_size
+from histomics_detect.roialign.roialign import roialign
 import tensorflow as tf
+
+
+def map_outputs(output, anchors, anchor_px, field):
+    """Transforms region-proposal network outputs from 3D tensors to 2D anchor arrays.
+    
+    The region-proposal network outputs 3D tensors containing either objectness scores 
+    or parameterized regressions. Given a set of K anchor sizes, the objectness and
+    regression tensors produced by the region-proposal network will have sizes 2*K 4*K
+    along their third dimension respectively. This function transforms these 3D tensors
+    to 2D tensors where the objectness or regressions for anchors are in rows.
+        
+    Parameters
+    ----------
+    output: tensor (float32)
+        M x N x D tensor containing objectness or regression outputs from the 
+        region-proposal network.
+    anchors: tensor (float32)
+        M*N*K x 4 tensor of anchor positions. Each row contains the x,y center 
+        location of the anchor in pixel units relative in the image coordinate frame, 
+        and the anchor width and height.
+    anchor_px: tensor (int32)
+        K-length 1-d tensor containing the anchor width hyperparameter values in pixel 
+        units.
+    field: float32
+        Edge length of the receptive field in pixels. This defines the area of the 
+        image that corresponds to 1 feature map and the anchor gridding.
+        
+    Returns
+    -------
+    mapped: tensor (float32)
+        M*N*K x 2 array of objectness scores or M*N*K x 4 tensor of regressions
+        where each row represents one anchor.
+    """
+  
+    #get anchor size index for each matching anchor
+    index = tf.map_fn(lambda x: tf.argmax(tf.equal(x, anchor_px),
+                                          output_type=tf.int32),
+                      tf.cast(anchors[:,3], tf.int32))
+
+    #get positions of anchors in rpn output
+    px = tf.cast((anchors[:,0]-field/2) / field, tf.int32)
+    py = tf.cast((anchors[:,1]-field/2) / field, tf.int32)
+
+    #add new dimension to split outputs by anchor (batch, y, x, anchor, output)
+    reshaped = tf.reshape(output, tf.concat([tf.shape(output)[0:-1],
+                                             [tf.size(anchor_px)],
+                                             [tf.shape(output)[-1] /
+                                              tf.size(anchor_px)]],
+                                            axis=0))
+
+    #gather from (batch, y, x, anchor, output) space to 2D array where each row is 
+    #an anchor and columns are objectness (2-array) or regression (4-array) scores
+    mapped = tf.gather_nd(reshaped,
+                          tf.stack([tf.zeros(tf.shape(px), tf.int32),
+                                    py, px, index],
+                                   axis=1))
+
+    return mapped
 
 
 class FasterRCNN(tf.keras.Model):
