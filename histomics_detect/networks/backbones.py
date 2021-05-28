@@ -1,3 +1,6 @@
+import tensorflow as tf
+
+
 def residual_backbone(model, stride, blocks, shape=(None, None, 3)):
     #builds backbone feature extraction network for region-proposal network
 
