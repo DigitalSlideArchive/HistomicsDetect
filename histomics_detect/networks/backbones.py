@@ -1,3 +1,4 @@
+from histomics_detect.networks.transfer_layers import transfer_layers
 import tensorflow as tf
 
 
