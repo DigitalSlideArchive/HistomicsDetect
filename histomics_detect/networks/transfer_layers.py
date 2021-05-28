@@ -1,3 +1,6 @@
+import tensorflow as tf
+
+
 def transfer_layers(layers, prefix, input):
     #This function copies layers from the input models into a single
     #model with appropriate name scopes to help separate variables by
