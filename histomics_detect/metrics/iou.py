@@ -52,7 +52,7 @@ def iou(source, target):
     return iou, intersection
   
   
-  def _greedy_iou_iteration(i, ious, source_mask, target_mask, matches):
+def _greedy_iou_iteration(i, ious, source_mask, target_mask, matches):
     """Performs one iteration of greedy IoU mapping.
     
     This is the loop body of the greedy IoU mapping algorithm. This identifies the 
