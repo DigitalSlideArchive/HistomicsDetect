@@ -1,3 +1,6 @@
+import tensorflow as tf
+
+
 def fast_rcnn(backbone, units=[4096, 4096], activations=['relu', 'relu'], pool=2, tiles=3):
     #generates fast RCNN model used in second regression that follows region proposal network.
     
