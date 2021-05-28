@@ -1,5 +1,5 @@
 from histomics_detect.networks.backbones import residual_backbone
-from tensorflow import tf
+import tensorflow as tf
 
 
 def rpn(resnet, n_anchors=3, stride=1, blocks=4, kernels=[3], dimensions=[256],
