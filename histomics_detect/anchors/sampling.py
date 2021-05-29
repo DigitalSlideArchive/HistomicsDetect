@@ -36,7 +36,7 @@ def sample_anchors(positive, negative, max_n=256, min_ratio=0.5):
 
     #sample positive anchors
     npos = tf.minimum(tf.shape(positive)[0], tf.cast(max_n/2, tf.int32))
-    indices = sample_no_replacement(tf.shape(positive)[0]-1, npos)
+    indices = _sample_no_replacement(tf.shape(positive)[0]-1, npos)
     positive = tf.gather(positive, indices)
 
     #sample negative anchors
