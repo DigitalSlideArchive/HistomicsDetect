@@ -166,7 +166,7 @@ class FasterRCNN(tf.keras.Model):
             #calculate fast r-cnn regression loss
             align_boxes = unparameterize(align_reg, rpn_boxes_positive)            
             align_reg_label = parameterize(rpn_boxes_positive, boxes)
-            align_reg_loss = model.loss[1](align_reg_label, align_reg)
+            align_reg_loss = self.loss[1](align_reg_label, align_reg)
 
             #calculate backbone gradients and optimize
             gradients = tape.gradient(rpn_total_loss, self.backbone.trainable_weights)
