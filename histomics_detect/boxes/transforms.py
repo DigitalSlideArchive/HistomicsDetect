@@ -129,7 +129,7 @@ def clip_boxes(boxes, width, height):
     
     #clips bounding boxes in [x,y,w,h] format to image dimensions
 
-    #unstack box columns
+    # unstack box columns
     x, y, w, h = _unstack_box_array(boxes)
 
     #clip left corner
@@ -180,3 +180,44 @@ def _unstack_box_array(boxes):
     h = tf.gather(boxes, 3, axis=1)
 
     return x, y, w, h
+
+
+def filter_edge_boxes(boxes, width: float, height: float, margin: float = 5.0):
+    """Unstacks the x,y,w,h bounding box parameters from the stacked input.
+
+        Parameters
+        ----------
+        margin: float
+            offset from the border of the image border where boxes that overlap are removed
+        height: float
+            height of the image
+        width: float
+            width of the image
+        boxes: tensor (float32)
+            N x 4 tensor where each row contains the x,y location of the upper left
+            corner of a ground truth box and its width and height in that order.
+
+        Returns
+        -------
+        filtered_boxes: tensor (float32)
+            N x 4 tensor where each row contains the x,y location of the upper left
+            corner of a ground truth box and its width and height in that order.
+            All boxes that have at least one point in the margin have been removed.
+        """
+    margin = tf.cast(margin, tf.float32)
+    width = tf.cast(width, tf.float32)
+    height = tf.cast(height, tf.float32)
+
+    # unstack box columns
+    x, y, w, h = _unstack_box_array(boxes)
+    x2 = x + w
+    y2 = y + h
+
+    # condition that box will be kept
+    min_cond = tf.logical_and(x > margin, y > margin)
+    max_cond = tf.logical_and(x2 < (width-margin), y2 < (height-margin))
+    condition = tf.logical_and(min_cond, max_cond)
+
+    # stack columns and collect boxes that fulfill the condition
+    filtered_boxes = tf.gather_nd(tf.stack([x, y, w, h], axis=1), tf.where(condition))
+    return filtered_boxes
