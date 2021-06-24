@@ -70,7 +70,8 @@ def map_outputs(output, anchors, anchor_px, field):
 
 class FasterRCNN(tf.keras.Model):
     def __init__(self, rpnetwork, backbone, shape, anchor_px, lmbda, 
-                 pool=2, tiles=3, **kwargs):
+                 pool=2, tiles=3, nms_iou=0.3, map_iou=0.5,
+                 **kwargs):        
     
         super(FasterRCNN, self).__init__()
 
@@ -87,7 +88,11 @@ class FasterRCNN(tf.keras.Model):
         #capture roialign parameters
         self.pool = pool
         self.tiles = tiles
-
+        
+        #parameters for nms
+        self.nms_iou = nms_iou
+        self.map_iou = map_iou        
+        
         #generate anchors for training efficiency - works for fixed-size training
         self.anchors = create_anchors(anchor_px, self.field, shape[0], shape[1])
 
