@@ -222,11 +222,6 @@ class FasterRCNN(tf.keras.Model):
     @tf.function  
     def test_step(self, data):
         
-        #parameters for nms
-        nms_iou = 0.3
-        map_iou = 0.5
-        delta = 0.1
-        
         #unpack input features, labels
         rgb, boxes = data
 
@@ -237,23 +232,25 @@ class FasterRCNN(tf.keras.Model):
         rgb = tf.keras.applications.resnet.preprocess_input(tf.cast(rgb, tf.float32))
 
         #expand dimensions
-        rgb = tf.expand_dims(rgb, axis=0)        
+        rgb = tf.expand_dims(rgb, axis=0)
         
         #predict and capture intermediate features
         features = self.backbone(rgb, training=True)
         output = self.rpnetwork(features, training=True)
+        
+        #create anchors since test images sizes are assumed variable
+        anchors = create_anchors(self.anchor_px, self.field, tf.shape(rgb)[2], tf.shape(rgb)[1])
 
         #transform outputs to 2D arrays with anchors in rows
-        rpn_obj = tf.nn.softmax(map_outputs(output[0], self.anchors, 
-                                            self.anchor_px, self.field))
-        rpn_reg = map_outputs(output[1], self.anchors, self.anchor_px, self.field)        
-        rpn_boxes = unparameterize(rpn_reg, self.anchors)
+        rpn_obj = tf.nn.softmax(map_outputs(output[0], anchors, self.anchor_px, self.field))
+        rpn_reg = map_outputs(output[1], anchors, self.anchor_px, self.field)        
+        rpn_boxes = unparameterize(rpn_reg, anchors)
         
         #clip regressed boxes to border, transform, and do nonmax supression
         rpn_boxes = clip_boxes(rpn_boxes, tf.shape(rgb)[1], tf.shape(rgb)[0])
         selected = tf.image.non_max_suppression(tf_box_transform(rpn_boxes),
                                                rpn_obj[:,1], tf.shape(rpn_obj)[0],
-                                               iou_threshold=nms_iou)
+                                               iou_threshold=self.nms_iou)
         rpn_boxes = tf.gather(rpn_boxes, selected, axis=0)
         rpn_obj = tf.gather(rpn_obj, selected, axis=0)
 
@@ -270,13 +267,15 @@ class FasterRCNN(tf.keras.Model):
                                    axis=0)
         
         #generate roialign predictions for rpn positive predictions
-        interpolated = roialign(features, rpn_boxes_positive, self.field, pool=2, tiles=3)
+        interpolated = roialign(features, rpn_boxes_positive, self.field, 
+                                self.pool, self.tiles)
         align_reg = self.fastrcnn(interpolated)
         align_boxes = unparameterize(align_reg, rpn_boxes_positive)
         
         #rpn accuracy measures via greedy iou mapping
         rpn_ious, _ = iou(rpn_boxes_positive, boxes)
-        precision, recall, tp, fp, fn, tp_list, fp_list, fn_list = greedy_iou(rpn_ious, map_iou)
+        precision, recall, tp, fp, fn, tp_list, fp_list, fn_list = greedy_iou(rpn_ious, 
+                                                                              self.map_iou)
         tf.print('rpn precision: ', precision)
         tf.print('rpn recall: ', recall)
         tf.print('rpn tp: ', tp)
@@ -285,7 +284,8 @@ class FasterRCNN(tf.keras.Model):
         
         #roialign accuracy measures via greedy iou mapping
         align_ious, _ = iou(align_boxes, boxes)
-        precision, recall, tp, fp, fn, tp_list, fp_list, fn_list = greedy_iou(align_ious, map_iou)
+        precision, recall, tp, fp, fn, tp_list, fp_list, fn_list = greedy_iou(align_ious, 
+                                                                              self.map_iou)
         tf.print('roialign precision: ', precision)
         tf.print('roialign recall: ', recall)
         tf.print('roialign tp: ', tp)
@@ -313,7 +313,7 @@ class FasterRCNN(tf.keras.Model):
                                                 axis=0)[:,1])
         
 
-        return {m.name: m.result() for m in self.standard}        
+        return {m.name: m.result() for m in self.standard}
 
     
 
