@@ -1,4 +1,7 @@
 import tensorflow as tf
+import matplotlib.pyplot as plt
+
+from histomics_detect.boxes import filter_edge_boxes
 
 
 def create_anchors(anchor_px, field, width, height):
@@ -32,26 +35,54 @@ def create_anchors(anchor_px, field, width, height):
         space. Each row contains the x,y center location of the anchor in pixel 
         units relative in the image coordinate frame, and the anchor width and 
         height.
-    """        
+    """
 
-    #initialize ragged tensor
-    px = tf.RaggedTensor.from_tensor(tf.expand_dims(anchor_px, 1))
+    # initialize ragged tensor
+    px = tf.expand_dims(anchor_px, 1)
+    x_pair, y_pair = _generate_x_y_pairs(px, field, width, height)
 
-    #generate anchors for different sizes and aspect ratios
-    anchors = tf.map_fn(lambda x: 
-                        _anchors_at_size(tf.squeeze(x), field, width, height), 
-                        px, 
-                        fn_output_signature=tf.RaggedTensorSpec(ragged_rank=0, 
-                                                                dtype=tf.dtypes.float32))
+    single_size_anchors = tf.concat((tf.reshape(x_pair, (tf.size(x_pair),1)),
+                                    tf.reshape(y_pair, (tf.size(x_pair),1)),
+                                    tf.ones((tf.size(x_pair),1)),
+                                    tf.ones((tf.size(x_pair),1))),
+                                   axis=1)
 
-    #convert to tensor and discard zeros
-    anchors = tf.reshape(anchors.to_tensor(),
-                         [tf.cast(tf.reduce_max(anchors.row_lengths()), tf.int32)
-                          * tf.size(anchors.row_lengths()),
-                          tf.shape(anchors[0])[1]])
-    anchors = tf.boolean_mask(anchors, tf.not_equal(anchors[:,3], 0), axis=0)  
-  
+    anchors = tf.tile(tf.expand_dims(single_size_anchors, axis=0), [tf.size(px), 1, 1])
+
+    # add the width and height to the anchors
+    px_expanded = tf.cast(tf.expand_dims(px, axis=1), tf.float32)
+    ones = tf.ones((3, 1, 1))
+    multiplier = tf.concat((ones, ones, px_expanded, px_expanded), axis=2)
+    anchors = anchors * multiplier
+
+    # plotting for testing
+    plt.figure()
+
+    # transform to box representation
+    x, y, w, h = tf.split(tf.reshape(anchors, (-1, 4)), 4, axis=1)
+    anchors = tf.concat((x - w/2, y - h/2, w, h), axis=1)
+
+    # remove anchors that cross the boundary
+    anchors = filter_edge_boxes(anchors, width, height, 0)
+
+    # transform back to anchor representation
+    x, y, w, h = tf.split(anchors, 4, axis=1)
+    anchors = tf.concat((x + w / 2, y + h / 2, w, h), axis=1)
     return anchors
+
+
+def _generate_x_y_pairs(px, field, width, height):
+    size = tf.reduce_min(px)
+
+    # get anchor corners
+    x_corners = _anchor_corners(size, field, width)
+    y_corners = _anchor_corners(size, field, height)
+
+    # replicate for coordinate pairing
+    x_pair = tf.tile(tf.expand_dims(x_corners, axis=0), [tf.size(y_corners), 1])
+    y_pair = tf.tile(tf.expand_dims(y_corners, axis=1), [1, tf.size(x_corners)])
+
+    return x_pair, y_pair
 
 
 def _anchors_at_size(size, field, width, height):
@@ -85,19 +116,19 @@ def _anchors_at_size(size, field, width, height):
         height.
     """
 
-    #get anchor corners
+    # get anchor corners
     x_corners = _anchor_corners(size, field, width)
     y_corners = _anchor_corners(size, field, height)
 
-    #replicate for coordinate pairing
-    x_pair = tf.tile(tf.expand_dims(x_corners, axis=0), [tf.size(y_corners),1])
-    y_pair = tf.tile(tf.expand_dims(y_corners, axis=1), [1,tf.size(x_corners)])
+    # replicate for coordinate pairing
+    x_pair = tf.tile(tf.expand_dims(x_corners, axis=0), [tf.size(y_corners), 1])
+    y_pair = tf.tile(tf.expand_dims(y_corners, axis=1), [1, tf.size(x_corners)])
 
-    #reshape into N x 4 array
+    # reshape into N x 4 array
     anchors = tf.stack((tf.reshape(x_pair, tf.size(x_pair)),
                         tf.reshape(y_pair, tf.size(x_pair)),
-                        tf.cast(size, tf.float32)*tf.ones(tf.size(x_pair)),
-                        tf.cast(size, tf.float32)*tf.ones(tf.size(x_pair))),
+                        tf.cast(size, tf.float32) * tf.ones(tf.size(x_pair)),
+                        tf.cast(size, tf.float32) * tf.ones(tf.size(x_pair))),
                        axis=1)
 
     return anchors
@@ -129,14 +160,14 @@ def _anchor_corners(size, field, length):
         1D tensor of anchor corner positions in pixels.
     """
 
-    #first and last anchor index
-    first = tf.math.ceil(tf.cast(size, tf.float32) / 
-                         (2*tf.cast(field, tf.float32)) - 1/2)
-    last = tf.math.floor((tf.cast(length, tf.float32)- 
-                          tf.cast(size,tf.float32)/2) / 
-                         tf.cast(field, tf.float32) - 1/2)
+    # first and last anchor index
+    first = tf.math.ceil(tf.cast(size, tf.float32) /
+                         (2 * tf.cast(field, tf.float32)) - 1 / 2)
+    last = tf.math.floor((tf.cast(length, tf.float32) -
+                          tf.cast(size, tf.float32) / 2) /
+                         tf.cast(field, tf.float32) - 1 / 2)
 
-    #anchor corners
-    corners = tf.cast(field, tf.float32) * (tf.range(first, last+1) + 1/2) - tf.cast(size, tf.float32)/2
-    
+    # anchor corners
+    corners = tf.cast(field, tf.float32) * (tf.range(first, last + 1) + 1 / 2) - tf.cast(size, tf.float32) / 2
+
     return corners
