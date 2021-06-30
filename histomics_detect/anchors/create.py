@@ -43,18 +43,18 @@ def create_anchors(anchor_px, field, width, height):
     x_pair, y_pair = _generate_x_y_pairs(px, field, width, height)
 
     # transform from 2D meshgrid format to array format (1 row per anchor)
-    single_size_anchors = tf.concat((tf.reshape(x_pair, (tf.size(x_pair),1)),
-                                    tf.reshape(y_pair, (tf.size(x_pair),1)),
-                                    tf.ones((tf.size(x_pair),1)),
-                                    tf.ones((tf.size(x_pair),1))),
-                                   axis=1)
+    single_size_anchors = tf.concat((tf.reshape(x_pair, (tf.size(x_pair), 1)),
+                                    tf.reshape(y_pair, (tf.size(x_pair), 1)),
+                                    tf.ones((tf.size(x_pair), 1)),
+                                    tf.ones((tf.size(x_pair), 1))),
+                                    axis=1)
 
     # replicate array for each anchor size
     anchors = tf.tile(tf.expand_dims(single_size_anchors, axis=0), [tf.size(px), 1, 1])
 
     # add the width and height to the anchors
     px_expanded = tf.cast(tf.expand_dims(px, axis=1), tf.float32)
-    ones = tf.ones((3, 1, 1))
+    ones = tf.ones((3, 1, 1), tf.float32)
     multiplier = tf.concat((ones, ones, px_expanded, px_expanded), axis=2)
     anchors = anchors * multiplier
 
