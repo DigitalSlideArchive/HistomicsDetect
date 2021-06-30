@@ -68,6 +68,8 @@ def create_anchors(anchor_px, field, width, height):
     # transform back to anchor representation
     x, y, w, h = tf.split(anchors, 4, axis=1)
     anchors = tf.concat((x + w / 2, y + h / 2, w, h), axis=1)
+    tf.print(anchors)
+
     return anchors
 
 
