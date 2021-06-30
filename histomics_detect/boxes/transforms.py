@@ -9,8 +9,8 @@ def parameterize(positive, boxes):
     ----------
     positive: tensor (float32)
         M x 5 tensor of anchors matched to ground truth boxes. Each row contains
-        the x,y center location of an anchor, its width and height, and the index
-        of the box that the anchor is matched to.
+        the x,y upper left corner, width, height, and matched box index for one
+        anchor.
     boxes: tensor (float32)
         N x 4 tensor where each row contains the x,y location of the upper left
         corner of a ground truth box and its width and height in that order.
@@ -24,12 +24,13 @@ def parameterize(positive, boxes):
     #gather boxes matched to each anchor
     matched = tf.gather(boxes, tf.cast(positive[:,4], tf.int32), axis=0)
 
-    tx = tf.divide((matched[:,0] + matched[:,2]/2) - positive[:,0], positive[:,2])
-    ty = tf.divide((matched[:,1] + matched[:,3]/2) - positive[:,1], positive[:,3])
+    #calculate parameterization using matched anchors
+    tx = tf.divide(matched[:,0] - positive[:,0], positive[:,2])
+    ty = tf.divide(matched[:,1] - positive[:,1], positive[:,3])
     tw = tf.math.log(tf.divide(matched[:,2], positive[:,2]))
     th = tf.math.log(tf.divide(matched[:,3], positive[:,3]))
 
-    #stack
+    #stack results
     parameterized = tf.stack([tx, ty, tw, th], axis=1)
 
     return parameterized
