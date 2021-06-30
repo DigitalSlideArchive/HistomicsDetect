@@ -20,7 +20,7 @@ def filter_anchors(boxes, anchors, alpha=0.7, beta=0.3, gamma=0.3):
         corner of a ground truth box and its width and height in that order.
     anchors: tensor (float32)
         M x 4 tensor anchor positions organized in a dense grid over the image
-        space. Each row contains the x,y center location of the anchor in pixel 
+        space. Each row contains the x,y upper left corner of the anchor in pixel 
         units relative in the image coordinate frame, and the anchor width and 
         height.
     alpha: float32
@@ -36,12 +36,12 @@ def filter_anchors(boxes, anchors, alpha=0.7, beta=0.3, gamma=0.3):
     -------
     positive: tensor (float32)
         M x 4 tensor of positive anchor positions satisfying IoU criteria
-        with some ground truth object. Each row contains the x,y center location 
+        with some ground truth object. Each row contains the x,y upper left corner 
         of the anchor in pixel units relative in the image coordinate frame, and
         the anchor width and height.
     negative: tensor (float32)
         N x 4 tensor of negative anchor positions not satisfying IoU criteria with
-        any ground truth object. Each row contains the x,y center location of the
+        any ground truth object. Each row contains the x,y upper left corner of the
         anchor in pixel units relative in the image coordinate frame, and the
         anchor width and height.
     """
