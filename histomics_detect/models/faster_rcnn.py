@@ -24,8 +24,8 @@ def map_outputs(output, anchors, anchor_px, field):
         M x N x D tensor containing objectness or regression outputs from the 
         region-proposal network.
     anchors: tensor (float32)
-        M*N*K x 4 tensor of anchor positions. Each row contains the x,y center 
-        location of the anchor in pixel units relative in the image coordinate frame, 
+        M*N*K x 4 tensor of anchor positions. Each row contains the x,y upper left
+        corner of the anchor in pixels relative in the image coordinate frame, 
         and the anchor width and height.
     anchor_px: tensor (int32)
         K-length 1-d tensor containing the anchor width hyperparameter values in pixel 
@@ -46,9 +46,9 @@ def map_outputs(output, anchors, anchor_px, field):
                                           output_type=tf.int32),
                       tf.cast(anchors[:,3], tf.int32))
 
-    #get positions of anchors in rpn output
-    px = tf.cast((anchors[:,0]-field/2) / field, tf.int32)
-    py = tf.cast((anchors[:,1]-field/2) / field, tf.int32)
+    #use anchor centers to get positions of anchors in rpn output
+    px = tf.cast((anchors[:,0]+ anchors[:,2]/2) / field, tf.int32)
+    py = tf.cast((anchors[:,1]+ anchors[:,3]/2) / field, tf.int32)
 
     #add new dimension to split outputs by anchor (batch, y, x, anchor, output)
     reshaped = tf.reshape(output, tf.concat([tf.shape(output)[0:-1],
