@@ -186,7 +186,7 @@ def _anchor_corners(size, field, length):
     Returns
     -------
     corners: tensor (float32)
-        1D tensor of anchor corner positions in pixels.
+        1D tensor of upper/left anchor corner positions in pixels.
     """
 
     # first and last anchor index
