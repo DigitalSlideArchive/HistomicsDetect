@@ -49,8 +49,8 @@ def unparameterize(parameterized, positive):
         N x 4 tensor of anchor-matched boxes in a parameterized format.
     positive: tensor (float32)
         N x 5 tensor of anchors matched to ground truth boxes. Each row contains
-        the x,y center location of an anchor, its width and height, and the index
-        of the box that the anchor is matched to.
+        the x,y upper left corner, width, height, and matched box index for one
+        anchor.
         
     Returns
     -------
@@ -66,10 +66,6 @@ def unparameterize(parameterized, positive):
     y = tf.multiply(parameterized[:,1], positive[:,3]) + positive[:,1]
     w = tf.multiply(tf.exp(parameterized[:,2]), positive[:,2])
     h = tf.multiply(tf.exp(parameterized[:,3]), positive[:,3])
-
-    #translate box coordinates from center to edge
-    x = x - w/2
-    y = y - h/2
 
     #stack
     boxes = tf.stack([x, y, w, h], axis=1)
