@@ -69,6 +69,39 @@ def create_anchors(anchor_px, field, width, height):
 
 
 def _generate_x_y_pairs(px, field, width, height):
+    """Generates 2D tensors containing the (x,y) corner positions of anchors for a
+    square px x px anchor, height x width image, and given receptive field size.
+    
+    Each receptive field has a corresponding set of anchors with varying sizes.
+    Since anchors must be contained entirely within the image border, some receptive
+    fields at the border may lack a complete set of anchors. This function generates
+    the complete set of anchor positions for a given anchor size in a 2D format similar
+    to 'meshgrid'. The output includes anchors that cross the image border (these 
+    anchors are later filtered using box transformations).
+        
+    Parameters
+    ----------
+    size: int32
+        Anchor size in pixels.
+    field: float32
+        Edge length of the receptive field in pixels. This defines the area of the 
+        image that corresponds to 1 feature map from the backbone network grid spacing
+        of anchors.
+    width: int32
+        Image width in pixels.
+    height: int32
+        Image height in pixels.
+        
+    Returns
+    -------
+    x_pair: tensor (float32)
+        A 2D grid of anchor corner horizontal positions at each receptive field.
+    y_pair: tensor (float32)
+        A 2D grid of anchor corner vertical positions at each receptive field.
+    """    
+    
+    # the smallest anchor size will determine spacing from the border - larger 
+    # anchor sizes will be filtered later
     size = tf.reduce_min(px)
 
     # get anchor corners
