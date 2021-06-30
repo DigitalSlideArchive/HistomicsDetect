@@ -38,16 +38,18 @@ def create_anchors(anchor_px, field, width, height):
         height.
     """
 
-    # initialize ragged tensor
+    # generate unfiltered anchor locations using smallest anchors size
     px = tf.expand_dims(anchor_px, 1)
     x_pair, y_pair = _generate_x_y_pairs(px, field, width, height)
 
+    # transform from 2D meshgrid format to array format (1 row per anchor)
     single_size_anchors = tf.concat((tf.reshape(x_pair, (tf.size(x_pair),1)),
                                     tf.reshape(y_pair, (tf.size(x_pair),1)),
                                     tf.ones((tf.size(x_pair),1)),
                                     tf.ones((tf.size(x_pair),1))),
                                    axis=1)
 
+    # replicate array for each anchor size
     anchors = tf.tile(tf.expand_dims(single_size_anchors, axis=0), [tf.size(px), 1, 1])
 
     # add the width and height to the anchors
@@ -56,16 +58,17 @@ def create_anchors(anchor_px, field, width, height):
     multiplier = tf.concat((ones, ones, px_expanded, px_expanded), axis=2)
     anchors = anchors * multiplier
 
-    # transform to box representation
+    # transform anchors to box/corner representation for boundary filtering
     x, y, w, h = tf.split(tf.reshape(anchors, (-1, 4)), 4, axis=1)
     anchors = tf.concat((x - w/2, y - h/2, w, h), axis=1)
 
     # remove anchors that cross the boundary
     anchors = filter_edge_boxes(anchors, width, height, 0)
 
-    # transform back to anchor representation
+    # transform back to anchor/center representation
     x, y, w, h = tf.split(anchors, 4, axis=1)
     anchors = tf.concat((x + w / 2, y + h / 2, w, h), axis=1)
+    
     return anchors
 
 
