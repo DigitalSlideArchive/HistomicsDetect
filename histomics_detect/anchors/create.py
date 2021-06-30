@@ -55,9 +55,6 @@ def create_anchors(anchor_px, field, width, height):
     multiplier = tf.concat((ones, ones, px_expanded, px_expanded), axis=2)
     anchors = anchors * multiplier
 
-    # plotting for testing
-    plt.figure()
-
     # transform to box representation
     x, y, w, h = tf.split(tf.reshape(anchors, (-1, 4)), 4, axis=1)
     anchors = tf.concat((x - w/2, y - h/2, w, h), axis=1)
