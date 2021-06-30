@@ -143,9 +143,11 @@ def _generate_x_y_pairs(px, field, width, height):
     Returns
     -------
     x_pair: tensor (float32)
-        A 2D grid of anchor corner horizontal positions at each receptive field.
+        A 2D grid of anchor corner horizontal positions. Each position in the grid
+        represents a receptive field. Includes anchors that cross image boundaries.
     y_pair: tensor (float32)
-        A 2D grid of anchor corner vertical positions at each receptive field.
+        A 2D grid of anchor corner vertical positions. Each position in the grid
+        represents a receptive field. Includes anchors that cross image boundaries.
     """    
     
     # the smallest anchor size will determine spacing from the border - larger 
