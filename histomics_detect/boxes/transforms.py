@@ -183,7 +183,14 @@ def _unstack_box_array(boxes):
 
 
 def filter_edge_boxes(boxes, width: float, height: float, margin: float = 5.0):
-    """Unstacks the x,y,w,h bounding box parameters from the stacked input.
+    """Filters out boxes that cross the margin of the image boundary
+
+        a box is kept if all the points are within the image boundary inset by the margin parameter.
+
+        Example:
+            given a box with top left and bottom right corners [[2, 2], [9, 9]
+
+            for a image with size 10, 10 this box is not filtered if margin <= 1
 
         Parameters
         ----------
@@ -214,8 +221,8 @@ def filter_edge_boxes(boxes, width: float, height: float, margin: float = 5.0):
     y2 = y + h
 
     # condition that box will be kept
-    min_cond = tf.logical_and(x > margin, y > margin)
-    max_cond = tf.logical_and(x2 < (width-margin), y2 < (height-margin))
+    min_cond = tf.logical_and(x >= margin, y >= margin)
+    max_cond = tf.logical_and(x2 <= (width-margin), y2 <= (height-margin))
     condition = tf.logical_and(min_cond, max_cond)
 
     # stack columns and collect boxes that fulfill the condition
