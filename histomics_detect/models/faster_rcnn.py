@@ -147,6 +147,77 @@ class FasterRCNN(tf.keras.Model):
         
         
     @tf.function
+    def test_step(self, data):
+        
+        #unpack input features, labels
+        rgb, boxes = data
+
+        #convert boxes from RaggedTensor
+        boxes = boxes.to_tensor()
+        
+        #call model
+        rpn_obj, rpn_boxes, align_boxes = self.call(rgb)
+
+        #select rpn proposals predicted by region proposal network
+        positive = tf.greater(rpn_obj[:,1], 0.5)
+        rpn_boxes_positive = tf.boolean_mask(rpn_boxes, positive, axis=0)
+        rpn_obj_positive = tf.boolean_mask(rpn_obj, positive, axis=0)
+        
+        #select corresponding align boxes
+        align_boxes = tf.boolean_mask(align_boxes, positive, axis=0)
+        
+        #generate additional measures to monitor performance
+        negative = tf.logical_not(positive)
+        rpn_obj_negative = tf.boolean_mask(rpn_obj, negative, axis=0)
+        rpn_obj_labels = tf.concat([tf.ones(tf.shape(rpn_obj_positive)[0], tf.uint8),
+                                    tf.zeros(tf.shape(rpn_obj_negative)[0], tf.uint8)],
+                                   axis=0)
+        
+        #rpn accuracy measures via greedy iou mapping
+        rpn_ious, _ = iou(rpn_boxes_positive, boxes)
+        precision, recall, tp, fp, fn, tp_list, fp_list, fn_list = greedy_iou(rpn_ious, 
+                                                                              self.map_iou)
+        tf.print('rpn precision: ', precision)
+        tf.print('rpn recall: ', recall)
+        tf.print('rpn tp: ', tp)
+        tf.print('rpn fp: ', fp)
+        tf.print('rpn fn: ', fn)
+        
+        #roialign accuracy measures via greedy iou mapping
+        align_ious, _ = iou(align_boxes, boxes)
+        precision, recall, tp, fp, fn, tp_list, fp_list, fn_list = greedy_iou(align_ious, 
+                                                                              self.map_iou)
+        tf.print('align precision: ', precision)
+        tf.print('align recall: ', recall)
+        tf.print('align tp: ', tp)
+        tf.print('align fp: ', fp)
+        tf.print('align fn: ', fn)
+        
+        #measurements - objectness pr-auc, rpn pos box iou, align box iou, align box greedy iou
+        #update metrics
+        self.standard[0].update_state(rpn_ious)
+        self.standard[1].update_state(align_ious)
+        self.standard[2].update_state(rpn_obj_labels, 
+                                      tf.concat([rpn_obj_positive, rpn_obj_negative],
+                                                axis=0)[:,1])
+        self.standard[3].update_state(rpn_obj_labels, 
+                                      tf.concat([rpn_obj_positive, rpn_obj_negative],
+                                                axis=0)[:,1])
+        self.standard[4].update_state(rpn_obj_labels,
+                                      tf.concat([rpn_obj_positive, rpn_obj_negative],
+                                                axis=0)[:,1])
+        self.standard[5].update_state(rpn_obj_labels,
+                                      tf.concat([rpn_obj_positive, rpn_obj_negative],
+                                                axis=0)[:,1])
+        self.standard[6].update_state(rpn_obj_labels,
+                                      tf.concat([rpn_obj_positive, rpn_obj_negative],
+                                                axis=0)[:,1])
+        
+        #return metrics only
+        return {m.name: m.result() for m in self.standard} 
+    
+    
+    @tf.function
     def train_step(self, data):
     
         #unpack input features, predictor and discriminator labels, and 
