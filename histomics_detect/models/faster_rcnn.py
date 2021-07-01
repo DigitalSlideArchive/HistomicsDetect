@@ -116,8 +116,8 @@ class FasterRCNN(tf.keras.Model):
         rgb = tf.expand_dims(rgb, axis=0)
         
         #predict and capture intermediate features
-        features = model.backbone(rgb, training=False)
-        output = model.rpnetwork(features, training=False)
+        features = self.backbone(rgb, training=False)
+        output = self.rpnetwork(features, training=False)
 
         #generate anchors for input size image
         anchors = create_anchors(self.anchor_px, self.field, 
@@ -140,7 +140,7 @@ class FasterRCNN(tf.keras.Model):
         #generate roialign predictions for rpn positive predictions
         interpolated = roialign(features, rpn_boxes, self.field, 
                                 self.pool, self.tiles)
-        align_reg = model.fastrcnn(interpolated)
+        align_reg = self.fastrcnn(interpolated)
         align_boxes = unparameterize(align_reg, rpn_boxes)
         
         return rpn_obj, rpn_boxes, align_boxes        
