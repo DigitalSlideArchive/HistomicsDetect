@@ -1,4 +1,3 @@
-
 import setuptools
 
 with open('README.rst', 'r', encoding='utf-8') as fh:
@@ -22,7 +21,6 @@ setuptools.setup(
       'numpy',
       'pandas',
       'Pillow',
-      'tensorflow>=2.0',
       'tensorflow_addons',
     ],
     license='Apache Software License 2.0',

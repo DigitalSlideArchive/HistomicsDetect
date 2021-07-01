@@ -104,7 +104,119 @@ class FasterRCNN(tf.keras.Model):
         fn = tf.keras.metrics.FalseNegatives()
         fp = tf.keras.metrics.FalsePositives()
         self.standard = [mae_xy, mae_wh, auc_roc, auc_pr, tp, fn, fp]
+
         
+    @tf.function
+    def call(self, rgb):
+        
+        #normalize image
+        rgb = tf.keras.applications.resnet.preprocess_input(tf.cast(rgb, tf.float32))
+
+        #expand dimensions
+        rgb = tf.expand_dims(rgb, axis=0)
+        
+        #predict and capture intermediate features
+        features = self.backbone(rgb, training=False)
+        output = self.rpnetwork(features, training=False)
+
+        #generate anchors for input size image
+        anchors = create_anchors(self.anchor_px, self.field, 
+                                 tf.shape(rgb)[2], tf.shape(rgb)[1])
+
+        #transform outputs to 2D arrays with anchors in rows
+        rpn_obj = tf.nn.softmax(map_outputs(output[0], anchors,
+                                self.anchor_px, self.field))
+        rpn_reg = map_outputs(output[1], anchors, self.anchor_px, self.field)        
+        rpn_boxes = unparameterize(rpn_reg, anchors)
+        
+        #clip regressed boxes to border, transform, and do nonmax supression
+        rpn_boxes = clip_boxes(rpn_boxes, tf.shape(rgb)[2], tf.shape(rgb)[1])
+        selected = tf.image.non_max_suppression(tf_box_transform(rpn_boxes),
+                                                rpn_obj[:,1], tf.shape(rpn_obj)[0],
+                                                iou_threshold=self.nms_iou)
+        rpn_boxes = tf.gather(rpn_boxes, selected, axis=0)
+        rpn_obj = tf.gather(rpn_obj, selected, axis=0)
+        
+        #generate roialign predictions for rpn positive predictions
+        interpolated = roialign(features, rpn_boxes, self.field, 
+                                self.pool, self.tiles)
+        align_reg = self.fastrcnn(interpolated)
+        align_boxes = unparameterize(align_reg, rpn_boxes)
+        
+        return rpn_obj, rpn_boxes, align_boxes        
+        
+        
+    @tf.function
+    def test_step(self, data):
+        
+        #unpack input features, labels
+        rgb, boxes = data
+
+        #convert boxes from RaggedTensor
+        boxes = boxes.to_tensor()
+        
+        #call model
+        rpn_obj, rpn_boxes, align_boxes = self.call(rgb)
+
+        #select rpn proposals predicted by region proposal network
+        positive = tf.greater(rpn_obj[:,1], 0.5)
+        rpn_boxes_positive = tf.boolean_mask(rpn_boxes, positive, axis=0)
+        rpn_obj_positive = tf.boolean_mask(rpn_obj, positive, axis=0)
+        
+        #select corresponding align boxes
+        align_boxes = tf.boolean_mask(align_boxes, positive, axis=0)
+        
+        #generate additional measures to monitor performance
+        negative = tf.logical_not(positive)
+        rpn_obj_negative = tf.boolean_mask(rpn_obj, negative, axis=0)
+        rpn_obj_labels = tf.concat([tf.ones(tf.shape(rpn_obj_positive)[0], tf.uint8),
+                                    tf.zeros(tf.shape(rpn_obj_negative)[0], tf.uint8)],
+                                   axis=0)
+        
+        #rpn accuracy measures via greedy iou mapping
+        rpn_ious, _ = iou(rpn_boxes_positive, boxes)
+        precision, recall, tp, fp, fn, tp_list, fp_list, fn_list = greedy_iou(rpn_ious, 
+                                                                              self.map_iou)
+        tf.print('rpn precision: ', precision)
+        tf.print('rpn recall: ', recall)
+        tf.print('rpn tp: ', tp)
+        tf.print('rpn fp: ', fp)
+        tf.print('rpn fn: ', fn)
+        
+        #roialign accuracy measures via greedy iou mapping
+        align_ious, _ = iou(align_boxes, boxes)
+        precision, recall, tp, fp, fn, tp_list, fp_list, fn_list = greedy_iou(align_ious, 
+                                                                              self.map_iou)
+        tf.print('align precision: ', precision)
+        tf.print('align recall: ', recall)
+        tf.print('align tp: ', tp)
+        tf.print('align fp: ', fp)
+        tf.print('align fn: ', fn)
+        
+        #measurements - objectness pr-auc, rpn pos box iou, align box iou, align box greedy iou
+        #update metrics
+        self.standard[0].update_state(rpn_ious)
+        self.standard[1].update_state(align_ious)
+        self.standard[2].update_state(rpn_obj_labels, 
+                                      tf.concat([rpn_obj_positive, rpn_obj_negative],
+                                                axis=0)[:,1])
+        self.standard[3].update_state(rpn_obj_labels, 
+                                      tf.concat([rpn_obj_positive, rpn_obj_negative],
+                                                axis=0)[:,1])
+        self.standard[4].update_state(rpn_obj_labels,
+                                      tf.concat([rpn_obj_positive, rpn_obj_negative],
+                                                axis=0)[:,1])
+        self.standard[5].update_state(rpn_obj_labels,
+                                      tf.concat([rpn_obj_positive, rpn_obj_negative],
+                                                axis=0)[:,1])
+        self.standard[6].update_state(rpn_obj_labels,
+                                      tf.concat([rpn_obj_positive, rpn_obj_negative],
+                                                axis=0)[:,1])
+        
+        #return metrics only
+        return {m.name: m.result() for m in self.standard} 
+    
+    
     @tf.function
     def train_step(self, data):
     
@@ -221,104 +333,6 @@ class FasterRCNN(tf.keras.Model):
         metrics = {m.name: m.result() for m in self.standard}    
 
         return {**losses, **metrics}
-    
-    
-    @tf.function  
-    def test_step(self, data):
-        
-        #unpack input features, labels
-        rgb, boxes = data
-
-        #convert boxes from RaggedTensor
-        boxes = boxes.to_tensor()
-
-        #normalize image
-        rgb = tf.keras.applications.resnet.preprocess_input(tf.cast(rgb, tf.float32))
-
-        #expand dimensions
-        rgb = tf.expand_dims(rgb, axis=0)
-        
-        #predict and capture intermediate features
-        features = self.backbone(rgb, training=True)
-        output = self.rpnetwork(features, training=True)
-        
-        #create anchors since test images sizes are assumed variable
-        anchors = create_anchors(self.anchor_px, self.field, tf.shape(rgb)[2], tf.shape(rgb)[1])
-
-        #transform outputs to 2D arrays with anchors in rows
-        rpn_obj = tf.nn.softmax(map_outputs(output[0], anchors, self.anchor_px, self.field))
-        rpn_reg = map_outputs(output[1], anchors, self.anchor_px, self.field)        
-        rpn_boxes = unparameterize(rpn_reg, anchors)
-        
-        #clip regressed boxes to border, transform, and do nonmax supression
-        rpn_boxes = clip_boxes(rpn_boxes, tf.shape(rgb)[1], tf.shape(rgb)[0])
-        selected = tf.image.non_max_suppression(tf_box_transform(rpn_boxes),
-                                               rpn_obj[:,1], tf.shape(rpn_obj)[0],
-                                               iou_threshold=self.nms_iou)
-        rpn_boxes = tf.gather(rpn_boxes, selected, axis=0)
-        rpn_obj = tf.gather(rpn_obj, selected, axis=0)
-
-        #select objects predicted by region proposal network
-        positive = tf.greater(rpn_obj[:,1], 0.5)
-        rpn_boxes_positive = tf.boolean_mask(rpn_boxes, positive, axis=0)
-        rpn_obj_positive = tf.boolean_mask(rpn_obj, positive, axis=0)
-        
-        #generate additional measures to monitor performance
-        negative = tf.logical_not(positive)
-        rpn_obj_negative = tf.boolean_mask(rpn_obj, negative, axis=0)
-        rpn_obj_labels = tf.concat([tf.ones(tf.shape(rpn_obj_positive)[0], tf.uint8),
-                                    tf.zeros(tf.shape(rpn_obj_negative)[0], tf.uint8)],
-                                   axis=0)
-        
-        #generate roialign predictions for rpn positive predictions
-        interpolated = roialign(features, rpn_boxes_positive, self.field, 
-                                self.pool, self.tiles)
-        align_reg = self.fastrcnn(interpolated)
-        align_boxes = unparameterize(align_reg, rpn_boxes_positive)
-        
-        #rpn accuracy measures via greedy iou mapping
-        rpn_ious, _ = iou(rpn_boxes_positive, boxes)
-        precision, recall, tp, fp, fn, tp_list, fp_list, fn_list = greedy_iou(rpn_ious, 
-                                                                              self.map_iou)
-        tf.print('rpn precision: ', precision)
-        tf.print('rpn recall: ', recall)
-        tf.print('rpn tp: ', tp)
-        tf.print('rpn fp: ', fp)
-        tf.print('rpn fn: ', fn)
-        
-        #roialign accuracy measures via greedy iou mapping
-        align_ious, _ = iou(align_boxes, boxes)
-        precision, recall, tp, fp, fn, tp_list, fp_list, fn_list = greedy_iou(align_ious, 
-                                                                              self.map_iou)
-        tf.print('roialign precision: ', precision)
-        tf.print('roialign recall: ', recall)
-        tf.print('roialign tp: ', tp)
-        tf.print('roialign fp: ', fp)
-        tf.print('roialign fn: ', fn)
-        
-        #measurements - objectness pr-auc, rpn pos box iou, align box iou, align box greedy iou
-        #update metrics
-        self.standard[0].update_state(rpn_ious)
-        self.standard[1].update_state(align_ious)
-        self.standard[2].update_state(rpn_obj_labels, 
-                                      tf.concat([rpn_obj_positive, rpn_obj_negative],
-                                                axis=0)[:,1])
-        self.standard[3].update_state(rpn_obj_labels, 
-                                      tf.concat([rpn_obj_positive, rpn_obj_negative],
-                                                axis=0)[:,1])
-        self.standard[4].update_state(rpn_obj_labels,
-                                      tf.concat([rpn_obj_positive, rpn_obj_negative],
-                                                axis=0)[:,1])
-        self.standard[5].update_state(rpn_obj_labels,
-                                      tf.concat([rpn_obj_positive, rpn_obj_negative],
-                                                axis=0)[:,1])
-        self.standard[6].update_state(rpn_obj_labels,
-                                      tf.concat([rpn_obj_positive, rpn_obj_negative],
-                                                axis=0)[:,1])
-        
-
-        return {m.name: m.result() for m in self.standard}
-
     
 
 class CustomCallback(tf.keras.callbacks.Callback):
