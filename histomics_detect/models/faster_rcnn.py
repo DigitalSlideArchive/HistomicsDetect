@@ -284,22 +284,17 @@ class FasterRCNN(tf.keras.Model):
             align_reg_label = parameterize(rpn_boxes_positive, boxes)
             align_reg_loss = self.loss[1](align_reg_label, align_reg)
 
-            #calculate backbone gradients and optimize
-            gradients = tape.gradient(rpn_total_loss, self.backbone.trainable_weights)
-            self.optimizer.apply_gradients(zip(gradients,
-                                               self.backbone.trainable_weights))
+        #calculate backbone gradients and optimize
+        gradients = tape.gradient(rpn_total_loss, self.backbone.trainable_weights)
+        self.optimizer.apply_gradients(zip(gradients, self.backbone.trainable_weights))
 
-            #calculate rpn gradients and optimize
-            gradients = tape.gradient(rpn_total_loss, self.rpnetwork.trainable_weights)  
-            self.optimizer.apply_gradients(zip(gradients,
-                                               self.rpnetwork.trainable_weights))
+        #calculate rpn gradients and optimize
+        gradients = tape.gradient(rpn_total_loss, self.rpnetwork.trainable_weights)  
+        self.optimizer.apply_gradients(zip(gradients, self.rpnetwork.trainable_weights))
             
-            #calculate roialign gradients and optimize
-            gradients = tape.gradient(align_reg_loss, self.fastrcnn.trainable_weights)  
-            self.optimizer.apply_gradients(zip(gradients,
-                                               self.fastrcnn.trainable_weights))
-      
-    
+        #calculate roialign gradients and optimize
+        gradients = tape.gradient(align_reg_loss, self.fastrcnn.trainable_weights)  
+        self.optimizer.apply_gradients(zip(gradients, self.fastrcnn.trainable_weights))
     
         #ious for rpn, roialign
         rpn_ious, _ = iou(rpn_boxes, boxes)
