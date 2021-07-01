@@ -104,6 +104,47 @@ class FasterRCNN(tf.keras.Model):
         fn = tf.keras.metrics.FalseNegatives()
         fp = tf.keras.metrics.FalsePositives()
         self.standard = [mae_xy, mae_wh, auc_roc, auc_pr, tp, fn, fp]
+
+        
+    @tf.function
+    def call(self, rgb):
+        
+        #normalize image
+        rgb = tf.keras.applications.resnet.preprocess_input(tf.cast(rgb, tf.float32))
+
+        #expand dimensions
+        rgb = tf.expand_dims(rgb, axis=0)
+        
+        #predict and capture intermediate features
+        features = model.backbone(rgb, training=False)
+        output = model.rpnetwork(features, training=False)
+
+        #generate anchors for input size image
+        anchors = create_anchors(self.anchor_px, self.field, 
+                                 tf.shape(rgb)[2], tf.shape(rgb)[1])
+
+        #transform outputs to 2D arrays with anchors in rows
+        rpn_obj = tf.nn.softmax(map_outputs(output[0], anchors,
+                                self.anchor_px, self.field))
+        rpn_reg = map_outputs(output[1], anchors, self.anchor_px, self.field)        
+        rpn_boxes = unparameterize(rpn_reg, anchors)
+        
+        #clip regressed boxes to border, transform, and do nonmax supression
+        rpn_boxes = clip_boxes(rpn_boxes, tf.shape(rgb)[2], tf.shape(rgb)[1])
+        selected = tf.image.non_max_suppression(tf_box_transform(rpn_boxes),
+                                                rpn_obj[:,1], tf.shape(rpn_obj)[0],
+                                                iou_threshold=self.nms_iou)
+        rpn_boxes = tf.gather(rpn_boxes, selected, axis=0)
+        rpn_obj = tf.gather(rpn_obj, selected, axis=0)
+        
+        #generate roialign predictions for rpn positive predictions
+        interpolated = roialign(features, rpn_boxes, self.field, 
+                                self.pool, self.tiles)
+        align_reg = model.fastrcnn(interpolated)
+        align_boxes = unparameterize(align_reg, rpn_boxes)
+        
+        return rpn_obj, rpn_boxes, align_boxes        
+        
         
     @tf.function
     def train_step(self, data):
