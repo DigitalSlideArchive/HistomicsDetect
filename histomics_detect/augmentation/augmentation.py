@@ -1,5 +1,4 @@
 import tensorflow as tf
-import warnings
 
 
 def flip(rgb, boxes):
@@ -50,7 +49,6 @@ def flip(rgb, boxes):
     boxes = tf.RaggedTensor.from_tensor(tf.stack([x, y, w, h], axis=1))
 
     return rgb, boxes
-
 
 
 def crop(rgb, boxes, width, height, min_fraction=0.5):
