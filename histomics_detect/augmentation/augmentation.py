@@ -1,6 +1,38 @@
 import tensorflow as tf
 
 
+def _box_crop(corner, length, window):
+    """Applies a crop to a sequence of boxes to remove portions falling outside
+    a defined region.
+    
+    This function is applied to each dimension independently. Given the region
+    with edge length 'window', this crops the boxes to clip portions that lie 
+    outside the top/left or bottom right of the region. Boxes with zero overlap
+    will have their height/width set to zero.
+        
+    Parameters
+    ----------
+    corner: tensor (float32)
+        Coordinates of left or top of boxes.
+    length: tensor (float32)
+        Width or height of boxes.
+    window: float32
+        Width or height of region, assume upper/left corner is at 0.
+        
+    Returns
+    -------
+    corner_crop: tensor (float32)
+        1D tensor containing coordinate of upper/left of cropped boxes.
+    intersection: tensor (float32)
+        1D tensor containing height/width of cropped boxes.
+    """
+
+    corner_crop = tf.minimum(tf.maximum(corner, 0), window)
+    length_crop = tf.minimum(tf.maximum(corner+length, 0), window) - corner_crop
+
+    return corner_crop, length_crop
+
+
 def flip(rgb, boxes):
     """Randomly flips an image and ground truth boxes along horizontal and/or 
     verical axis.
@@ -136,8 +168,8 @@ def crop(rgb, boxes, width, height, min_fraction=0.5):
     #translate boxes and apply crop
     x = x - tf.cast(x_crop, tf.float32)
     y = y - tf.cast(y_crop, tf.float32)
-    x, wc = box_crop(x, w, tf.cast(width, tf.float32))
-    y, hc = box_crop(y, h, tf.cast(height, tf.float32))
+    x, wc = _box_crop(x, w, tf.cast(width, tf.float32))
+    y, hc = _box_crop(y, h, tf.cast(height, tf.float32))
 
     #calculate cropped box area, proportion of box in cropped region
     proportion = tf.divide(tf.multiply(wc, hc), tf.multiply(w, h))
@@ -153,38 +185,6 @@ def crop(rgb, boxes, width, height, min_fraction=0.5):
 
     return crop, boxes
   
-
-def box_crop(corner, length, window):
-    """Applies a crop to a sequence of boxes to remove portions falling outside
-    a defined region.
-    
-    This function is applied to each dimension independently. Given the region
-    with edge length 'window', this crops the boxes to clip portions that lie 
-    outside the top/left or bottom right of the region. Boxes with zero overlap
-    will have their height/width set to zero.
-        
-    Parameters
-    ----------
-    corner: tensor (float32)
-        Coordinates of left or top of boxes.
-    length: tensor (float32)
-        Width or height of boxes.
-    window: float32
-        Width or height of region, assume upper/left corner is at 0.
-        
-    Returns
-    -------
-    corner_crop: tensor (float32)
-        1D tensor containing coordinate of upper/left of cropped boxes.
-    intersection: tensor (float32)
-        1D tensor containing height/width of cropped boxes.
-    """
-
-    corner_crop = tf.minimum(tf.maximum(corner, 0), window)
-    length_crop = tf.minimum(tf.maximum(corner+length, 0), window) - corner_crop
-
-    return corner_crop, length_crop
-
 
 def jitter(boxes, percent=0.05):
     """Randomly displaces bounding boxes using uniform noise proportional
