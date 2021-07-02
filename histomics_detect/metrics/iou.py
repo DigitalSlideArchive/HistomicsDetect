@@ -172,8 +172,9 @@ def greedy_iou(ious, min_iou):
                                                             tf.shape(ious)[1]))
 
     #loop to perform greedy mapping
-    tf.while_loop(condition, _greedy_iou_iteration,
-                  [i, ious, source_mask, target_mask, matches])
+    _, _, _, _, matches = tf.while_loop(condition, _greedy_iou_iteration,
+                                        [i, ious, source_mask, target_mask, matches],
+                                        parallel_iterations=10)
 
     #stack outputs
     matches = matches.stack()

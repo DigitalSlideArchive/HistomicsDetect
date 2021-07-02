@@ -1,6 +1,38 @@
 import tensorflow as tf
 
 
+def _box_crop(corner, length, window):
+    """Applies a crop to a sequence of boxes to remove portions falling outside
+    a defined region.
+    
+    This function is applied to each dimension independently. Given the region
+    with edge length 'window', this crops the boxes to clip portions that lie 
+    outside the top/left or bottom right of the region. Boxes with zero overlap
+    will have their height/width set to zero.
+        
+    Parameters
+    ----------
+    corner: tensor (float32)
+        Coordinates of left or top of boxes.
+    length: tensor (float32)
+        Width or height of boxes.
+    window: float32
+        Width or height of region, assume upper/left corner is at 0.
+        
+    Returns
+    -------
+    corner_crop: tensor (float32)
+        1D tensor containing coordinate of upper/left of cropped boxes.
+    intersection: tensor (float32)
+        1D tensor containing height/width of cropped boxes.
+    """
+
+    corner_crop = tf.minimum(tf.maximum(corner, 0), window)
+    length_crop = tf.minimum(tf.maximum(corner+length, 0), window) - corner_crop
+
+    return corner_crop, length_crop
+
+
 def flip(rgb, boxes):
     """Randomly flips an image and ground truth boxes along horizontal and/or 
     verical axis.
@@ -49,7 +81,6 @@ def flip(rgb, boxes):
     boxes = tf.RaggedTensor.from_tensor(tf.stack([x, y, w, h], axis=1))
 
     return rgb, boxes
-
 
 
 def crop(rgb, boxes, width, height, min_fraction=0.5):
@@ -137,8 +168,8 @@ def crop(rgb, boxes, width, height, min_fraction=0.5):
     #translate boxes and apply crop
     x = x - tf.cast(x_crop, tf.float32)
     y = y - tf.cast(y_crop, tf.float32)
-    x, wc = box_crop(x, w, tf.cast(width, tf.float32))
-    y, hc = box_crop(y, h, tf.cast(height, tf.float32))
+    x, wc = _box_crop(x, w, tf.cast(width, tf.float32))
+    y, hc = _box_crop(y, h, tf.cast(height, tf.float32))
 
     #calculate cropped box area, proportion of box in cropped region
     proportion = tf.divide(tf.multiply(wc, hc), tf.multiply(w, h))
@@ -155,33 +186,79 @@ def crop(rgb, boxes, width, height, min_fraction=0.5):
     return crop, boxes
   
 
-def box_crop(corner, length, window):
-    """Applies a crop to a sequence of boxes to remove portions falling outside
-    a defined region.
+def jitter(boxes, percent=0.05):
+    """Randomly displaces bounding boxes using uniform noise proportional
+    to a percentage of box dimensions.
     
-    This function is applied to each dimension independently. Given the region
-    with edge length 'window', this crops the boxes to clip portions that lie 
-    outside the top/left or bottom right of the region. Boxes with zero overlap
-    will have their height/width set to zero.
+    This function is used for data augmentation and adds noise proportional
+    to bounding box dimensions to the box coordinates.
         
     Parameters
     ----------
-    corner: tensor (float32)
-        Coordinates of left or top of boxes.
-    length: tensor (float32)
-        Width or height of boxes.
-    window: float32
-        Width or height of region, assume upper/left corner is at 0.
+    boxes: tensor (float32)
+        M x 4 tensor where each row contains the x,y location of the upper left
+        corner of a ground truth box and its width and height in that order.
+    percent: float
+        Range of noise applied to bounding boxes. Default value of 0.05
+        corresponds to up to a +/- 5 percent displacement.
         
     Returns
     -------
-    corner_crop: tensor (float32)
-        1D tensor containing coordinate of upper/left of cropped boxes.
-    intersection: tensor (float32)
-        1D tensor containing height/width of cropped boxes.
+    boxes: tensor (float32)
+        M x 4 tensor where the x,y locations of each box have been displaced by 
+        up to 'percent' of the box width and height respectively.
     """
+    
+    #condense ragged tensor
+    [x, y, w, h] = tf.unstack(boxes.to_tensor(), axis=1)
+    
+    #generate noise vectors
+    x_noise = tf.random.uniform(tf.shape(x), -percent, percent, tf.float32)
+    y_noise = tf.random.uniform(tf.shape(y), -percent, percent, tf.float32)
+    
+    #modify locations
+    x = x + tf.multiply(x_noise, w)
+    y = y + tf.multiply(y_noise, h)
+    
+    #stack result and return
+    boxes = tf.RaggedTensor.from_tensor(tf.stack((x,y,w,h), axis=1))
+    
+    return boxes
 
-    corner_crop = tf.minimum(tf.maximum(corner, 0), window)
-    length_crop = tf.minimum(tf.maximum(corner+length, 0), window) - corner_crop
 
-    return corner_crop, length_crop
+def shrink(boxes, percent=0.05):
+    """Randomly resizes bounding boxes proportional to box dimensions.
+    
+    This function is used for data augmentation.
+        
+    Parameters
+    ----------
+    boxes: tensor (float32)
+        M x 4 tensor where each row contains the x,y location of the upper left
+        corner of a ground truth box and its width and height in that order.
+    percent: float
+        Range of percentages used to resize bounding boxes. Default value of 0.05
+        corresponds to up to a +/- 5 percent change in size.
+        
+    Returns
+    -------
+    boxes: tensor (float32)
+        M x 4 tensor where the width and height of each box have been changed by 
+        up to 'percent' of the box width and height respectively.
+    """
+    
+    #condense ragged tensor
+    [x, y, w, h] = tf.unstack(boxes.to_tensor(), axis=1)
+    
+    #generate noise vectors
+    w_noise = tf.random.uniform(tf.shape(x), 1.0-percent, 1.0+percent, tf.float32)
+    h_noise = tf.random.uniform(tf.shape(y), 1.0-percent, 1.0+percent, tf.float32)
+    
+    #modify dimensions
+    w = tf.multiply(w_noise, w)
+    h = tf.multiply(h_noise, h)
+    
+    #stack result and return
+    boxes = tf.RaggedTensor.from_tensor(tf.stack((x,y,w,h), axis=1))
+    
+    return boxes
