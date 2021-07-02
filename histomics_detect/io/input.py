@@ -40,7 +40,7 @@ def read_roi(roi):
                                                   roi['width'], roi['height']),
                                                  axis=1))
 
-    return rgb, boxes
+    return rgb, boxes, roi['png']
 
 
 def roi_tensors(files):
