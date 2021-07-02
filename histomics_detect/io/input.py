@@ -40,7 +40,7 @@ def read_roi(roi):
                                                   roi['width'], roi['height']),
                                                  axis=1))
 
-    return rgb, boxes
+    return rgb, boxes, roi['png']
 
 
 def roi_tensors(files):
@@ -79,6 +79,7 @@ def roi_tensors(files):
         rois['width'].append(tf.constant(table['width'], tf.float32))
         rois['height'].append(tf.constant(table['height'], tf.float32))
 
+    rois['png'] = tf.ragged.stack(rois['png'])    
     rois['x'] = tf.ragged.stack(rois['x'])
     rois['y'] = tf.ragged.stack(rois['y'])
     rois['width'] = tf.ragged.stack(rois['width'])
