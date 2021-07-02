@@ -149,8 +149,12 @@ class FasterRCNN(tf.keras.Model):
     @tf.function
     def test_step(self, data):
         
-        #unpack input features, labels
-        rgb, boxes = data
+        #unpack image, boxes, and optional image name
+        if len(data) ==3:
+            rgb, boxes, name = data
+        else:
+            rgb, boxes = data
+            name = ''
 
         #convert boxes from RaggedTensor
         boxes = boxes.to_tensor()
@@ -177,6 +181,8 @@ class FasterRCNN(tf.keras.Model):
         rpn_ious, _ = iou(rpn_boxes_positive, boxes)
         precision, recall, tp, fp, fn, tp_list, fp_list, fn_list = greedy_iou(rpn_ious, 
                                                                               self.map_iou)
+        tf.print('\n')
+        tf.print(name)
         tf.print('rpn precision: ', precision)
         tf.print('rpn recall: ', recall)
         tf.print('rpn tp: ', tp)
@@ -187,6 +193,8 @@ class FasterRCNN(tf.keras.Model):
         align_ious, _ = iou(align_boxes, boxes)
         precision, recall, tp, fp, fn, tp_list, fp_list, fn_list = greedy_iou(align_ious, 
                                                                               self.map_iou)
+        tf.print('\n')
+        tf.print(name)        
         tf.print('align precision: ', precision)
         tf.print('align recall: ', recall)
         tf.print('align tp: ', tp)
@@ -220,13 +228,11 @@ class FasterRCNN(tf.keras.Model):
     @tf.function
     def train_step(self, data):
     
-        #unpack input features, predictor and discriminator labels, and 
-        #optional sample weights
+        #unpack image, boxes, and optional image name
         if len(data) ==3:
-            rgb, boxes, sample_weight = data
+            rgb, boxes, name = data
         else:
             rgb, boxes = data
-            sample_weight = None
 
         #convert boxes from RaggedTensor
         boxes = boxes.to_tensor()
