@@ -251,12 +251,12 @@ def shrink(boxes, percent=0.05):
     [x, y, w, h] = tf.unstack(boxes.to_tensor(), axis=1)
     
     #generate noise vectors
-    x_noise = tf.random.uniform(tf.shape(x), 1.0-percent, 1.0+percent, tf.float32)
-    y_noise = tf.random.uniform(tf.shape(y), 1.0-percent, 1.0+percent, tf.float32)
+    w_noise = tf.random.uniform(tf.shape(x), 1.0-percent, 1.0+percent, tf.float32)
+    h_noise = tf.random.uniform(tf.shape(y), 1.0-percent, 1.0+percent, tf.float32)
     
     #modify dimensions
-    w = tf.multiply(x_noise, w)
-    y = tf.multiply(y_noise, h)
+    w = tf.multiply(w_noise, w)
+    h = tf.multiply(h_noise, h)
     
     #stack result and return
     boxes = tf.RaggedTensor.from_tensor(tf.stack((x,y,w,h), axis=1))
