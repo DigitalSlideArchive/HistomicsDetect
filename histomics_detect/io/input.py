@@ -1,5 +1,81 @@
+import os
 import pandas as pd
+from PIL import Image
 import tensorflow as tf
+
+
+def dataset(path, png_parser, csv_parser, size, cases):
+    """Generates a tf.data.Dataset object containing matched region
+    of interest .pngs and bounding box .csv files.
+    
+    This function accepts parser function handles that are used to parse
+    and match png and csv filenames. Each parser is written to return 
+    case and unique roi identifier strings that are used for matching
+    png and csv files and for filtering cases from the match list.
+        
+    Parameters
+    ----------
+    path: string
+        Path containing png region of interest images and csv files 
+        containing corresponding bounding boxes.
+    png_parser: function
+        Function that accepts a single string containing the filename
+        of a png image (without path) and that returns the corresponding
+        case and roi name. The case and roi name should uniquely identify
+        the roi within the dataset.
+    csv_parser: function
+        Function that accepts a single string containing the filename
+        of a png image (without path) and that returns the corresponding
+        case and roi name. The case and roi name should uniquely identify
+        the roi within the dataset.
+    cases: list of strings
+        A list of cases used to select rois for inclusion in the 
+        dataset.
+        
+    Returns
+    -------
+    ds: tf.data.Dataset
+        A dataset where each element contains an rgb image tensor, an N x 4
+        tensor of bounding boxes where each row contains the x,y location 
+        of the upper left corner of a ground truth box and its width and
+        height in that order, and the png filename.
+    """
+    
+    #get list of csv and png files in path   
+    csvs = [f for f in os.listdir(path) if os.path.splitext(f)[1] == '.csv']
+    pngs = [f for f in os.listdir(path) if os.path.splitext(f)[1] == '.png']
+        
+    #extract case, roi strings from filenames
+    csv_case_roi = [csv_parser(csv) for csv in csvs]
+    png_case_roi = [png_parser(png) for png in pngs]
+        
+    #form lists of case + roi for matching
+    csv_match_string = [csv[0] + csv[1] for csv in csv_case_roi]
+    png_match_string = [png[0] + png[1] for png in png_case_roi]
+        
+    #match
+    indexes = [csv_match_string.index(png) if png in csv_match_string else -1 for 
+               png in png_match_string]
+    
+    #form tuples of case, matching png file, csv file
+    matches = [(case_roi[0], png, csvs[index]) for (case_roi, png, index) in 
+               zip(png_case_roi, pngs, indexes) if index != -1]
+        
+    #filter on cases
+    matches = [match for match in matches if match[0] in cases]
+            
+    #format outputs
+    matches = [(path + match[1], path + match[2]) for match in matches]
+    
+    #filter on image size
+    matches = [(png, csv) for (png, csv) in matches if
+               (Image.open(png).size[0] > size) and (Image.open(png).size[1] > size)]    
+    
+    #build dataset
+    ds = tf.data.Dataset.from_tensor_slices(roi_tensors(matches))
+    ds = ds.map(lambda x: read_roi(x))
+    
+    return ds
 
 
 def read_roi(roi):
