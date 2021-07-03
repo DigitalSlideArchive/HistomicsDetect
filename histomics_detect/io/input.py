@@ -1,9 +1,10 @@
 import os
 import pandas as pd
+from PIL import Image
 import tensorflow as tf
 
 
-def dataset(path, png_parser, csv_parser, cases):
+def dataset(path, png_parser, csv_parser, size, cases):
     """Generates a tf.data.Dataset object containing matched region
     of interest .pngs and bounding box .csv files.
     
@@ -65,6 +66,10 @@ def dataset(path, png_parser, csv_parser, cases):
             
     #format outputs
     matches = [(path + match[1], path + match[2]) for match in matches]
+    
+    #filter on image size
+    matches = [(png, csv) for (png, csv) in matches if
+               (Image.open(png).size[0] > size) and (Image.open(png).size[1] > size)]    
     
     #build dataset
     ds = tf.data.Dataset.from_tensor_slices(roi_tensors(matches))
