@@ -6,7 +6,7 @@ from histomics_detect.metrics import iou
 
 
 def normal_loss(loss_object: tf.keras.losses.Loss, boxes: tf.Tensor, rpn_boxes_positive: tf.Tensor,
-                nms_output: tf.Tensor, positive_weight: float, standard: List[tf.keras.metrics] = [],
+                nms_output: tf.Tensor, positive_weight: float, standard: List[tf.keras.metrics.Metric] = [],
                 weighted_loss: bool = False, neg_pos_loss: bool = False, use_pos_neg_loss: bool = False)\
         -> Tuple[tf.Tensor, tf.Tensor]:
     """
@@ -87,7 +87,7 @@ def normal_loss(loss_object: tf.keras.losses.Loss, boxes: tf.Tensor, rpn_boxes_p
 
 
 def paper_loss(boxes: tf.Tensor, rpn_boxes_positive: tf.Tensor, nms_output: tf.Tensor,
-               loss_object: tf.keras.losses.Loss, positive_weight: float, standard: List[tf.keras.metrics],
+               loss_object: tf.keras.losses.Loss, positive_weight: float, standard: List[tf.keras.metrics.Metric],
                weighted_loss: bool = False, neg_pos_loss: bool = False) \
         -> Tuple[tf.Tensor, tf.Tensor]:
     """
@@ -138,6 +138,7 @@ def paper_loss(boxes: tf.Tensor, rpn_boxes_positive: tf.Tensor, nms_output: tf.T
     """
     ious, _ = iou(boxes, rpn_boxes_positive)
 
+    # calculate the labels
     def func(i) -> tf.int32:
         index = tf.cast(i, tf.int32)
         assignment = tf.cast(tf.argmax(ious[index]), tf.int32)
@@ -147,6 +148,7 @@ def paper_loss(boxes: tf.Tensor, rpn_boxes_positive: tf.Tensor, nms_output: tf.T
     indeces = tf.expand_dims(indeces, axis=1)
     labels = tf.scatter_nd(indeces, tf.ones(tf.shape(indeces)), tf.shape(nms_output))
 
+    # calculate pos and neg loss
     if weighted_loss or neg_pos_loss:
         (pos_loss, neg_loss), (positive_labels, negative_labels) = _pos_neg_loss_calculation(nms_output, labels,
                                                                                              loss_object, standard)
@@ -159,25 +161,62 @@ def paper_loss(boxes: tf.Tensor, rpn_boxes_positive: tf.Tensor, nms_output: tf.T
     else:
         weight = tf.ones(tf.shape(nms_output))
 
+    # reformat labels and output from 0, 1 space to -1, 1 space
     labels = (2 * labels - 1)
     nms_output = (2 * nms_output) - 1
 
+    # calculate loss
     loss = weight * kb.log(1 + kb.exp(-labels * nms_output))
     loss = tf.reduce_sum(loss)
     return loss, indeces
 
 
 def _pos_neg_loss_calculation(nms_output: tf.Tensor, labels: tf.Tensor, loss_object: tf.keras.losses.Loss,
-                              standard: List[tf.keras.metrics]) \
+                              standard: List[tf.keras.metrics.Metric]) \
         -> Tuple[Tuple[tf.Tensor, tf.Tensor], Tuple[tf.Tensor, tf.Tensor]]:
+    """
+
+    S: size of neighborhood
+    N: number of predictions
+    D: size of a single prediction
+    G: number of ground truth boxes
+
+    Parameters
+    ----------
+    nms_output: tensor (float32)
+        objectiveness scores corresponding to the predicted boxes after lnms processing
+        shape: N x 1
+    labels: tensor (int32)
+        ground truth labels of corresponding s
+        shape: N x 1
+    loss_object:
+        loss function for loss calculation between 'labels' and 'nms_output'
+    standard: metric
+        list of tensorflow metrics
+        1, 2 should be positive and negative loss respectively if 'neg_pos_loss' set to true
+
+    Returns
+    -------
+    pos_loss: tensor (float32)
+        scalar value
+    neg_loss: tensor (float32)
+        scalar value
+    positive_labels: tensor (int32)
+        ones for the number of positive ground truth samples
+    negative_labels:
+        zeros for the number of positive ground truth samples
+
+    """
 
     positive_predictions, negative_predictions = tf.dynamic_partition(nms_output, tf.cast(labels == 0, tf.int32), 2)
     positive_labels = tf.ones(tf.shape(positive_predictions))
     negative_labels = tf.zeros(tf.shape(negative_predictions))
 
+    # calculate loss
     pos_loss = tf.reduce_sum(loss_object(positive_predictions, positive_labels))
     neg_loss = tf.reduce_sum(loss_object(negative_predictions, negative_labels))
 
+    # update metrics
     standard[1].update_state(pos_loss + 1e-8)
     standard[2].update_state(neg_loss + 1e-8)
 
