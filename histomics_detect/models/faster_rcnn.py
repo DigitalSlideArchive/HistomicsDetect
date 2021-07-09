@@ -143,7 +143,7 @@ class FasterRCNN(tf.keras.Model):
         align_reg = self.fastrcnn(interpolated)
         align_boxes = unparameterize(align_reg, rpn_boxes)
         
-        return rpn_obj, rpn_boxes, align_boxes        
+        return features, rpn_obj, rpn_boxes, align_boxes        
         
         
     @tf.function
@@ -160,7 +160,7 @@ class FasterRCNN(tf.keras.Model):
         boxes = boxes.to_tensor()
         
         #call model
-        rpn_obj, rpn_boxes, align_boxes = self.call(rgb)
+        _, rpn_obj, rpn_boxes, align_boxes = self.call(rgb)
 
         #select rpn proposals predicted by region proposal network
         positive = tf.greater(rpn_obj[:,1], 0.5)
