@@ -119,6 +119,45 @@ def read_roi(roi):
     return rgb, boxes, roi['png']
 
 
+def resize(rgb, boxes, factor):
+    """Resizes input image and bounding boxes.
+    
+    This function can be used as a transformation in the input pipeline to 
+    resize the images and bounding boxes. This can help to improve performance
+    in images with small objects or images where object density is high
+    relative to anchor density.
+        
+    Parameters
+    ----------
+    rgb: tensor
+        The image as a 2D or 3D tensor.
+    boxes: tensor (float32)
+        N x 4 tensor containing boxes where each row contains the x,y 
+        location of the upper left corner of a ground truth box and its width 
+        and height in that order.
+    factor: float32
+        The scalar factor used for resizing. A value of 2.0 will double the
+        magnification.
+        
+    Returns
+    -------
+    rgb: tensor
+        The input image resized by factor.
+    boxes: tensor (float32)
+        N x 4 tensor containing boxes resized by factor.
+    """
+    
+    #resize image
+    rgb = tf.image.resize(rgb, tf.cast([factor * tf.cast(tf.shape(rgb)[0], tf.float32), 
+                                        factor * tf.cast(tf.shape(rgb)[1], tf.float32)], 
+                                       tf.int32))
+    
+    #resize boxes
+    boxes = factor * boxes
+    
+    return rgb, boxes
+
+
 def roi_tensors(files):
     """Generates dictionary of image file path and ground truth box values.
     
