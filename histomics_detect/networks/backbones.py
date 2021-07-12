@@ -8,6 +8,7 @@ def residual_backbone(model, stride, blocks, shape=(None, None, 3)):
     #sweep layers to identify activation layer of the block 'blocks'
     add = False
     block = 0
+    terminal = len(model.layers)
     for (i,layer) in enumerate(model.layers):
 
         #change state if add layer encountered and continue with next layer
