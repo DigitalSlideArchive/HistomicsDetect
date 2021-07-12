@@ -150,8 +150,7 @@ def paper_loss(boxes: tf.Tensor, rpn_boxes_positive: tf.Tensor, nms_output: tf.T
 
     # calculate pos and neg loss
     if weighted_loss or neg_pos_loss:
-        (pos_loss, neg_loss), (positive_labels, negative_labels) = _pos_neg_loss_calculation(nms_output, labels,
-                                                                                             loss_object, standard)
+        _, (positive_labels, negative_labels) = _pos_neg_loss_calculation(nms_output, labels, loss_object, standard)
 
     if weighted_loss:
         num_pos = tf.cast(tf.size(positive_labels), tf.float32)
@@ -221,3 +220,76 @@ def _pos_neg_loss_calculation(nms_output: tf.Tensor, labels: tf.Tensor, loss_obj
     standard[2].update_state(neg_loss + 1e-8)
 
     return (pos_loss, neg_loss), (positive_labels, negative_labels)
+
+
+def clustering_loss(nms_output: tf.Tensor, cluster_assignment: tf.Tensor, loss_object: tf.keras.losses.Loss,
+                    positive_weight: float, standard: List[tf.keras.metrics.Metric], weighted_loss: bool = False,
+                    neg_pos_loss: bool = False) -> Tuple[Tuple[tf.Tensor, tf.Tensor], Tuple[tf.Tensor, tf.Tensor]]:
+    """
+    clustering loss calculation
+
+    the loss is calculated by:
+    - for each cluster the prediction with the highest objectiveness score is stored
+    - the index of the stored predictions is set to one in a labels vector
+    - the values of the other indexes are 0
+    - the loss is calculated by calculating the difference btw. the labels and the nms_output
+
+    S: size of neighborhood
+    N: number of predictions
+    D: size of a single prediction
+    G: number of ground truth boxes
+
+    Parameters
+    ----------
+    loss_object:
+        loss function for loss calculation between 'labels' and 'nms_output'
+    nms_output: tensor (float32)
+        objectiveness scores corresponding to the predicted boxes after lnms processing
+        shape: N x 1
+    cluster_assignment: tensor (int32)
+        cluster labels for each prediction
+        shape: N x 1
+    positive_weight: float
+        weight applied to the positive labels ( == 1)
+    standard: metric
+        list of tensorflow metrics
+        1, 2 should be positive and negative loss respectively if 'neg_pos_loss' set to true
+    weighted_loss: bool
+        if true, loss of positive labels is weighted by the difference in numbers of positive and negative
+        labels
+    neg_pos_loss: bool
+        if true, the loss of the positive and the negative labels is calculated and logged in the metricsss
+
+    Returns
+    -------
+    loss: float
+        loss value
+    indexes: tensor (float32)
+        indexes of the values that correspond to positive anchors
+
+    """
+
+    def func(i) -> tf.int32:
+        index = tf.cast(i, tf.int32)
+        max_index = tf.argmax(
+            tf.multiply(tf.cast(nms_output, tf.float32),
+                        tf.cast(tf.equal(cluster_assignment, tf.cast(index, tf.int32)),
+                                tf.float32)))
+        return tf.cast(max_index, tf.int32)
+
+    indeces = tf.map_fn(lambda x: func(x), tf.range(0, tf.reduce_max(cluster_assignment) + 1))
+
+    indeces = tf.expand_dims(indeces, axis=1)
+    labels = tf.scatter_nd(indeces, tf.ones(tf.shape(indeces)), tf.shape(nms_output))
+
+    # calculate pos and neg loss
+    if neg_pos_loss:
+        _pos_neg_loss_calculation(nms_output, labels, loss_object, standard)
+
+    if weighted_loss:
+        weight = labels * positive_weight + (1 - labels)
+    else:
+        weight = tf.ones(tf.shape(nms_output))
+
+    loss = loss_object(weight * labels, weight * nms_output)
+    return tf.reduce_sum(loss), labels
