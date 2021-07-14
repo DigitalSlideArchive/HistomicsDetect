@@ -147,8 +147,84 @@ class LearningNMS(tf.keras.Model, ABC):
 
         return block, output
 
+    def _interpolate_features(self, features: tf.Tensor, rpn_boxes: tf.Tensor) -> tf.Tensor:
+        """
+        interpolate features for the given boxes
+
+        Parameters
+        ----------
+        features: tensor (float32)
+            features extracted from the image
+        rpn_boxes: tensor (float32)
+            shape: N x 4
+            region proposal boxes
+
+        Returns
+        -------
+        interpolated: tensor (float32)
+            shape: N x s
+            interpolated feature for each box
+        """
+        # calculate interpolated features
+        interpolated = roialign(features, rpn_boxes, self.field,
+                                pool=self.roialign_pool, tiles=self.roialign_tiles)
+        interpolated = tf.reduce_mean(interpolated, axis=1)
+        interpolated = tf.reduce_mean(interpolated, axis=1)
+
+        interpolated = tf.reshape(interpolated, [tf.shape(interpolated)[0], -1])
+
+        return interpolated
+
     def call(self, inputs, training=None, mask=None):
         self.train_step(inputs)
+
+    def test_step(self, data):
+        if len(data) == 3:
+            rgb, boxes, sample_weight = data
+        else:
+            rgb, boxes = data
+            sample_weight = None
+
+        rgb = tf.squeeze(rgb)
+
+        # convert boxes from RaggedTensor
+        expand_fn = lambda x: tf.expand_dims(x, axis=0)
+        boxes = boxes.to_tensor()
+        boxes = tf.squeeze(boxes)
+        boxes = tf.cond(tf.size(tf.shape(boxes)) == 1, lambda: expand_fn(boxes), lambda: boxes)
+
+        # normalize image
+        norm = tf.keras.applications.resnet.preprocess_input(tf.cast(rgb, tf.float32))
+
+        # expand dimensions
+        norm = tf.expand_dims(norm, axis=0)
+
+        # extract features and rpn boxes from image
+        features = self.backbone(norm, training=False)
+        outputs = self.rpnetwork(features, training=False)
+
+        rpn_reg = map_outputs(outputs[1], self.anchors, self.anchor_px, self.field)
+        rpn_boxes = unparameterize(rpn_reg, self.anchors)
+
+        # get objectiveness scores
+        rpn_obj = tf.nn.softmax(map_outputs(outputs[0], self.anchors, self.anchor_px, self.field))
+        scores = rpn_obj[:, 1] / (tf.reduce_sum(rpn_obj, axis=1))
+
+        # filter out negative predictions
+        # TODO make threshold variable
+        condition = tf.where(tf.greater(scores, 0.3))
+        rpn_boxes = tf.gather_nd(rpn_boxes, condition)
+        scores = tf.expand_dims(tf.gather_nd(scores, condition), axis=1)
+
+        compressed_features = self.compression_net(features, training=False)
+
+        interpolated = self._interpolate_features(compressed_features, rpn_boxes)
+        interpolated = tf.concat([scores, interpolated], axis=1)
+        # run network
+        nms_output = self.net((interpolated, rpn_boxes), training=True)
+
+        # TODO metrics
+        pass
 
     def train_step(self, data):
         if len(data) == 3:
@@ -201,20 +277,20 @@ class LearningNMS(tf.keras.Model, ABC):
         if not self.compressed_gradient:
             compressed_features = self.compression_net(features, training=False)
 
+            # calculate interpolated features
+            interpolated = self._interpolate_features(compressed_features, rpn_boxes)
+            interpolated = tf.concat([scores, interpolated], axis=1)
+
         # training step
         with tf.GradientTape(persistent=True) as tape:
 
             if self.compressed_gradient:
                 compressed_features = self.compression_net(features, training=True)
 
-            # calculate interpolated features
-            interpolated = roialign(compressed_features, rpn_boxes, self.field,
-                                    pool=self.roialign_pool, tiles=self.roialign_tiles)
-            interpolated = tf.reduce_mean(interpolated, axis=1)
-            interpolated = tf.reduce_mean(interpolated, axis=1)
+                # calculate interpolated features
+                interpolated = self._interpolate_features(compressed_features, rpn_boxes)
+                interpolated = tf.concat([scores, interpolated], axis=1)
 
-            interpolated = tf.reshape(interpolated, [tf.shape(interpolated)[0], -1])
-            interpolated = tf.concat([scores, interpolated], axis=1)
             # run network
             nms_output = self.net((interpolated, rpn_boxes), training=True)
 

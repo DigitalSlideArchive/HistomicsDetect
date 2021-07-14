@@ -7,7 +7,7 @@ from histomics_detect.metrics import iou
 
 def normal_loss(loss_object: tf.keras.losses.Loss, boxes: tf.Tensor, rpn_boxes_positive: tf.Tensor,
                 nms_output: tf.Tensor, positive_weight: float, standard: List[tf.keras.metrics.Metric] = [],
-                weighted_loss: bool = False, neg_pos_loss: bool = False, use_pos_neg_loss: bool = False)\
+                weighted_loss: bool = False, neg_pos_loss: bool = False, use_pos_neg_loss: bool = False) \
         -> Tuple[tf.Tensor, tf.Tensor]:
     """
     calculates the normal loss of a lnms output
@@ -79,7 +79,7 @@ def normal_loss(loss_object: tf.keras.losses.Loss, boxes: tf.Tensor, rpn_boxes_p
         weighted_labels = tf.cast(labels, tf.float32) * num_neg / num_pos * positive_weight
         weight = weighted_labels + (1 - labels)
 
-        loss = loss_object(weighted_labels, nms_output*weight)
+        loss = loss_object(weighted_labels, nms_output * weight)
     else:
         loss = loss_object(labels, nms_output)
 
@@ -293,3 +293,46 @@ def clustering_loss(nms_output: tf.Tensor, cluster_assignment: tf.Tensor, loss_o
 
     loss = loss_object(weight * labels, weight * nms_output)
     return tf.reduce_sum(loss), labels
+
+
+def _cal_xor_loss(nms_output: tf.Tensor, cluster_assignment: tf.Tensor):
+    """
+    xor loss
+
+    Parameters
+    ----------
+    nms_output: tensor (float32)
+        output scores for each prediction
+    cluster_assignment: tensor (int32)
+        assignment of each prediction to the corresponding cluster
+
+    Returns
+    -------
+    loss: float
+        calculated loss
+    """
+    def cluster_sum(i) -> tf.float32:
+        pred_indexes = tf.where(tf.equal(tf.cast(cluster_assignment, tf.float32), tf.cast(i, tf.float32)))
+        predictions = tf.gather_nd(nms_output, pred_indexes)
+
+        sum_req = (tf.reduce_sum(predictions)-1)**2
+
+        indexes = tf.cast(pred_indexes, tf.int64)
+        update_shape = tf.cast(tf.shape(cluster_assignment), tf.int64)
+
+        false_fn = lambda: tf.scatter_nd(indexes, tf.ones(tf.shape(indexes)[0])*sum_req, update_shape)
+        scattered_sum = tf.cond(tf.size(indexes) == 0, lambda: tf.zeros(update_shape), false_fn)
+        return tf.squeeze(scattered_sum)
+
+    number_clusters = tf.reduce_max(cluster_assignment)+1
+    number_predictions = tf.shape(cluster_assignment)[0]
+
+    output_signature = tf.TensorSpec.from_tensor(tf.ones(number_predictions, dtype=tf.float32))
+
+    cluster_sums = tf.map_fn(lambda x: cluster_sum(x), tf.range(0, number_clusters), dtype=output_signature)
+    cluster_sums = tf.expand_dims(tf.reduce_sum(cluster_sums, axis=0), axis=1)
+
+    # TODO neg pos loss
+
+    loss = tf.reduce_sum((cluster_sums-1)**2 - (nms_output-0.5)**2, axis=0)
+    return loss, None
