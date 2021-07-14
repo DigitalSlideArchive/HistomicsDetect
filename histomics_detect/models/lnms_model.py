@@ -198,10 +198,14 @@ class LearningNMS(tf.keras.Model, ABC):
         rpn_boxes = tf.gather_nd(rpn_boxes, condition)
         scores = tf.expand_dims(tf.gather_nd(scores, condition), axis=1)
 
-        compressed_features = self.compression_net(features, training=False)
+        if not self.compressed_gradient:
+            compressed_features = self.compression_net(features, training=False)
 
         # training step
         with tf.GradientTape(persistent=True) as tape:
+
+            if self.compressed_gradient:
+                compressed_features = self.compression_net(features, training=True)
 
             # calculate interpolated features
             interpolated = roialign(compressed_features, rpn_boxes, self.field,
@@ -234,6 +238,11 @@ class LearningNMS(tf.keras.Model, ABC):
 
         gradients = tape.gradient(loss, self.net.trainable_weights)
         self.optimizer.apply_gradients(zip(gradients, self.net.trainable_weights))
+
+        if self.use_image_features and self.compressed_gradient:
+            gradients = tape.gradient(loss, self.compression_net)
+            self.optimizer.apply_gradients(zip(gradients, self.compression_net.trainable_weights))
+
         self.standard[0].update_state(loss + 1e-8)
 
         return loss

@@ -23,6 +23,7 @@ def assemble_neighborhood(anchor_id: int, interpolated: tf.Tensor, rpn_boxes_pos
         N x D interpolated features
     rpn_boxes_positive: tensor (float32)
         N x 4 x,y,w,h of the boxes or centroids
+        TODO not used remove
     neighborhood_indeces: tensor (int32)
         S x 2 indeces of predictions in neighborhood
     neighborhood_additional_info: tensor (float32)
@@ -42,6 +43,9 @@ def assemble_neighborhood(anchor_id: int, interpolated: tf.Tensor, rpn_boxes_pos
         neighborhood = tf.reshape(tf.gather(interpolated, neighborhood_indeces),
                                   [tf.size(neighborhood_indeces), tf.shape(interpolated)[1]])
         tiled_pred = tf.tile(tf.expand_dims(interpolated[anchor_id], axis=0), (tf.shape(neighborhood)[0], 1))
+    elif False:
+        # TODO implement interpolate joint feature representation
+        pass
     else:
         neighborhood = tf.reshape(tf.gather(interpolated[:, 0], neighborhood_indeces),
                                   [tf.size(neighborhood_indeces), 1])
