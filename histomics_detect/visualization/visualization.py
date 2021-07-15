@@ -1,3 +1,6 @@
+import matplotlib.pyplot as plt
+
+
 def _plot_boxes(boxes, color):
     """Adds bounding boxes with chosen color to current plot.
         
