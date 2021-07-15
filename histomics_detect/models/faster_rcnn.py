@@ -105,7 +105,118 @@ class FasterRCNN(tf.keras.Model):
         fp = tf.keras.metrics.FalsePositives()
         self.standard = [mae_xy, mae_wh, auc_roc, auc_pr, tp, fn, fp]
 
+
+    @tf.function
+    def threshold(self, boxes, objectness, tau=0.5):
+        """Thresholds rpn predictions using objectness score. Helpful for processing
+        raw inference results.
         
+        Parameters
+        ----------
+        boxes: tensor
+            N x 4 tensor where each row contains the x,y location of the upper left
+            corner of a regressed box and its width and height in that order.
+        objectness:
+            N x 2 tensor containing corresponding softmax objectness scores in rows.
+            Second column contains score for being an object.
+        tau: float
+            Scalar threshold applied to objectness scores to define which rpn 
+            predictions are objects. Range is [0,1]. Default value is 0.5.
+        
+        Returns
+        -------
+        filtered_boxes: tensor
+            M x 4 tensor containing objectness score filtered boxes (M <= N).
+        filtered_objectness tensor
+            M x 2 tensor containing objectness score filtered objectness scores (M <= N).       
+        """
+        
+        #get binary mask of positive objects
+        mask = tf.greater(objectness[:,1], 0.5)
+        
+        #filter using mask
+        filtered_boxes = tf.boolean_mask(boxes, mask, axis=0)
+        filtered_objectness = tf.boolean_mask(objectness, mask, axis=0)       
+        
+        return filtered_boxes, filtered_objectness, mask
+        
+        
+    @tf.function
+    def nms(self, boxes, objectness, nms_iou=0.3):
+        """Performs nms on regressed boxes returning filtered boxes and corresponding
+        objectness scores. Helpful for processing raw inference results.
+        
+        Parameters
+        ----------
+        boxes: tensor
+            N x 4 tensor where each row contains the x,y location of the upper left
+            corner of a regressed box and its width and height in that order.
+        objectness: tensor
+            N x 2 tensor containing corresponding softmax objectness scores in rows.
+            Second column contains score for being an object.
+        nms_iou: float
+            Scalar threshold used by nms to define overlapping objects. Range is
+            (0,1]. Default value is 0.3.
+            
+        Returns
+        -------
+        nms_boxes: tensor
+            M x 4 tensor containing nms filtered boxes (M <= N).
+        nms_objectness tensor
+            M x 2 tensor containing nms filtered objectness scores (M <= N).
+        """    
+        
+        #get indices of boxes selected by NMS
+        selected = tf.image.non_max_suppression(tf_box_transform(boxes),
+                                                objectness[:,1], tf.shape(objectness)[0],
+                                                iou_threshold=nms_iou)
+        
+        #filter intputs to discard unselected boxes
+        nms_boxes = tf.gather(boxes, selected, axis=0)
+        nms_objectness = tf.gather(objectness, selected, axis=0)
+    
+        return nms_boxes, nms_objectness, selected
+    
+    
+    @tf.function
+    def align(self, boxes, features, field, pool, tiles):
+        """Performs roialign on filtered inference results. If results are not filtered
+        prior to this step an OOM error may occur. Helpful for processing raw inference results.
+        
+        Parameters
+        ----------
+        features: tensor
+            The three dimensional feature map tensor produced by the backbone network.
+        boxes: tensor
+            N x 4 tensor where each row contains the x,y location of the upper left
+            corner of an rpn regressed box and its width and height in that order.
+        field: float32
+            Field size of the backbone network in pixels.
+        pool: int32
+            pool^2 is the number of locations to interpolate features at within 
+            each tile.
+        tiles: int32
+            tile^2 is the number of tiles that each regressed bounding box is divided
+            into.
+            
+        Returns
+        -------
+        align_boxes: tensor
+            N x 4 tensor containing aligned boxes.
+        nms_objectness tensor
+            N x 2 tensor containing corresponding objectness scores.
+        """
+ 
+        #interpolate features in pool*tiles x pool*tiles grid for each box
+        interpolated = roialign(features, boxes, field, pool, tiles)
+        
+        #generate roialign predictions and transform to box representation
+        align_reg = self.fastrcnn(interpolated)
+        align_boxes = unparameterize(align_reg, boxes)
+        
+        return align_boxes
+    
+    
     @tf.function
     def call(self, rgb):
         
