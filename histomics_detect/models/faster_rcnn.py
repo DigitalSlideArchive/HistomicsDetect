@@ -325,7 +325,7 @@ class FasterRCNN(tf.keras.Model):
         
         #measurements - objectness pr-auc, rpn pos box iou, align box iou, align box greedy iou
         #update metrics
-        self.standard[0].update_state(rpn_ious)
+        self.standard[0].update_state(align_ious)
         self.standard[1].update_state(align_ious)
         self.standard[2].update_state(rpn_obj_labels, 
                                       tf.concat([rpn_obj_positive, rpn_obj_negative],
