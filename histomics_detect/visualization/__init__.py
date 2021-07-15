@@ -10,5 +10,6 @@ from .visualization import plot_inference
 __all__ = (
 
     # functions and classes of this package
+    'plot_evaluation',
     'plot_inference'
 )
