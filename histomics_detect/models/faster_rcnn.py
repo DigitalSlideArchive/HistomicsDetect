@@ -217,6 +217,7 @@ class FasterRCNN(tf.keras.Model):
         return align_boxes
     
     
+    @tf.function
     def raw(self, rgb):
         """raw() produces unfiltered objectness scores and regressions from the rpn
         network, and backbone features. Additional steps are required for thresholding
