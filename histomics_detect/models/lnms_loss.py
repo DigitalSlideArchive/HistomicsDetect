@@ -296,8 +296,20 @@ def clustering_loss(nms_output: tf.Tensor, cluster_assignment: tf.Tensor, loss_o
 
 
 def _cal_xor_loss(nms_output: tf.Tensor, cluster_assignment: tf.Tensor):
-    """
+    """ TODO test in pipeline
     xor loss
+    the loss is minimal if only one score of each cluster is one and the others are zero
+
+    calculation for each cluster:
+    - calculate cluster sum
+    - subtract one and square result
+
+    calculate for each prediction
+    - subtract 1/2 from the score
+    - square the result
+    - subtract from previous result
+
+    sum over all prediction losses
 
     Parameters
     ----------
@@ -331,8 +343,6 @@ def _cal_xor_loss(nms_output: tf.Tensor, cluster_assignment: tf.Tensor):
 
     cluster_sums = tf.map_fn(lambda x: cluster_sum(x), tf.range(0, number_clusters), dtype=output_signature)
     cluster_sums = tf.expand_dims(tf.reduce_sum(cluster_sums, axis=0), axis=1)
-
-    # TODO neg pos loss
 
     loss = tf.reduce_sum((cluster_sums-1)**2 - (nms_output-0.5)**2, axis=0)
     return loss, None

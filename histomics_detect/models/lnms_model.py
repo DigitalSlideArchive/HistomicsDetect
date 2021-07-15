@@ -9,6 +9,50 @@ from histomics_detect.models.faster_rcnn import map_outputs
 from histomics_detect.boxes.transforms import unparameterize
 from histomics_detect.boxes.match import calculate_cluster_assignment
 from histomics_detect.models.lnms_loss import normal_loss, clustering_loss, paper_loss
+from histomics_detect.metrics.lnms import calculate_performance_stats_lnms
+
+
+def extract_data(data):
+    """
+    extracts image and boxes from the data
+
+    Parameters
+    ----------
+    data
+
+    - D: number of ground truth boxes
+
+    Returns
+    -------
+    norm: tensor (float32)
+        normalized image
+    boxes: tensor (float32)
+        shape: D x 4
+        ground truth boxes for the given image
+    sample_weight: string
+        name of the image
+    """
+    if len(data) == 3:
+        rgb, boxes, sample_weight = data
+    else:
+        rgb, boxes = data
+        sample_weight = None
+
+    rgb = tf.squeeze(rgb)
+
+    # convert boxes from RaggedTensor
+    expand_fn = lambda x: tf.expand_dims(x, axis=0)
+    boxes = boxes.to_tensor()
+    boxes = tf.squeeze(boxes)
+    boxes = tf.cond(tf.size(tf.shape(boxes)) == 1, lambda: expand_fn(boxes), lambda: boxes)
+
+    # normalize image
+    norm = tf.keras.applications.resnet.preprocess_input(tf.cast(rgb, tf.float32))
+
+    # expand dimensions
+    norm = tf.expand_dims(norm, axis=0)
+
+    return norm, boxes, sample_weight
 
 
 class LearningNMS(tf.keras.Model, ABC):
@@ -175,30 +219,30 @@ class LearningNMS(tf.keras.Model, ABC):
 
         return interpolated
 
-    def call(self, inputs, training=None, mask=None):
-        self.train_step(inputs)
+    def extract_boxes_n_scores(self, norm: tf.Tensor):
+        """
+        extracts rpn_boxes and corresponding objectiveness scores with the faster r-cnn network
 
-    def test_step(self, data):
-        if len(data) == 3:
-            rgb, boxes, sample_weight = data
-        else:
-            rgb, boxes = data
-            sample_weight = None
+        Parameters
+        ----------
+        norm: tensor (float32)
+            normalized image
 
-        rgb = tf.squeeze(rgb)
+        - N: number of predictions
+        - d: feature dimensions
 
-        # convert boxes from RaggedTensor
-        expand_fn = lambda x: tf.expand_dims(x, axis=0)
-        boxes = boxes.to_tensor()
-        boxes = tf.squeeze(boxes)
-        boxes = tf.cond(tf.size(tf.shape(boxes)) == 1, lambda: expand_fn(boxes), lambda: boxes)
-
-        # normalize image
-        norm = tf.keras.applications.resnet.preprocess_input(tf.cast(rgb, tf.float32))
-
-        # expand dimensions
-        norm = tf.expand_dims(norm, axis=0)
-
+        Returns
+        -------
+        features: tensor (float32)
+            shape: N x d
+            features extracted from the image for each box
+        rpn_boxes: tensor (float32)
+            shape: N x 4
+            each prediction in box form
+        scores: tensor (float32)
+            shape: N x 1
+            objectiveness score for each prediction
+        """
         # extract features and rpn boxes from image
         features = self.backbone(norm, training=False)
         outputs = self.rpnetwork(features, training=False)
@@ -216,6 +260,16 @@ class LearningNMS(tf.keras.Model, ABC):
         rpn_boxes = tf.gather_nd(rpn_boxes, condition)
         scores = tf.expand_dims(tf.gather_nd(scores, condition), axis=1)
 
+        return features, rpn_boxes, scores
+
+    def call(self, inputs, training=None, mask=None):
+        self.train_step(inputs)
+
+    def test_step(self, data):
+        norm, boxes, sample_weight = extract_data(data)
+
+        features, rpn_boxes, scores = self.extract_boxes_n_scores(norm)
+
         compressed_features = self.compression_net(features, training=False)
 
         interpolated = self._interpolate_features(compressed_features, rpn_boxes)
@@ -223,29 +277,14 @@ class LearningNMS(tf.keras.Model, ABC):
         # run network
         nms_output = self.net((interpolated, rpn_boxes), training=True)
 
-        # TODO metrics
-        pass
+        tp, tn, fp, fn = calculate_performance_stats_lnms(boxes, rpn_boxes, nms_output)
+        self.standard[3].update_state(tp)
+        self.standard[4].update_state(fp)
+        self.standard[5].update_state(tn)
+        self.standard[6].update_state(fn)
 
     def train_step(self, data):
-        if len(data) == 3:
-            rgb, boxes, sample_weight = data
-        else:
-            rgb, boxes = data
-            sample_weight = None
-
-        rgb = tf.squeeze(rgb)
-
-        # convert boxes from RaggedTensor
-        expand_fn = lambda x: tf.expand_dims(x, axis=0)
-        boxes = boxes.to_tensor()
-        boxes = tf.squeeze(boxes)
-        boxes = tf.cond(tf.size(tf.shape(boxes)) == 1, lambda: expand_fn(boxes), lambda: boxes)
-
-        # normalize image
-        norm = tf.keras.applications.resnet.preprocess_input(tf.cast(rgb, tf.float32))
-
-        # expand dimensions
-        norm = tf.expand_dims(norm, axis=0)
+        norm, boxes, sample_weight = extract_data(data)
 
         loss = self._train_function(norm, boxes, sample_weight)
 
@@ -258,21 +297,7 @@ class LearningNMS(tf.keras.Model, ABC):
     def _train_function(self, norm, boxes, sample_weight):
 
         # extract features and rpn boxes from image
-        features = self.backbone(norm, training=False)
-        outputs = self.rpnetwork(features, training=False)
-
-        rpn_reg = map_outputs(outputs[1], self.anchors, self.anchor_px, self.field)
-        rpn_boxes = unparameterize(rpn_reg, self.anchors)
-
-        # get objectiveness scores
-        rpn_obj = tf.nn.softmax(map_outputs(outputs[0], self.anchors, self.anchor_px, self.field))
-        scores = rpn_obj[:, 1] / (tf.reduce_sum(rpn_obj, axis=1))
-
-        # filter out negative predictions
-        # TODO make threshold variable
-        condition = tf.where(tf.greater(scores, 0.3))
-        rpn_boxes = tf.gather_nd(rpn_boxes, condition)
-        scores = tf.expand_dims(tf.gather_nd(scores, condition), axis=1)
+        features, rpn_boxes, scores = self.extract_boxes_n_scores(norm)
 
         if not self.compressed_gradient:
             compressed_features = self.compression_net(features, training=False)
