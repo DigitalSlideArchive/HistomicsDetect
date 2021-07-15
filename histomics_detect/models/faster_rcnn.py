@@ -80,7 +80,7 @@ class FasterRCNN(tf.keras.Model):
         self.fastrcnn = fast_rcnn(backbone, tiles=tiles, pool=pool)
 
         #capture field, anchor sizes, loss mixing
-        self.field = field_size(backbone)
+        self.field = tf.cast(field_size(backbone), tf.float32)
         self.anchor_px = anchor_px
         self.lmbda = lmbda
         
