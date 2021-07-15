@@ -8,7 +8,7 @@ from histomics_detect.roialign.roialign import roialign
 from histomics_detect.models.faster_rcnn import map_outputs
 from histomics_detect.boxes.transforms import unparameterize
 from histomics_detect.boxes.match import calculate_cluster_assignment
-from histomics_detect.models.lnms_loss import normal_loss, clustering_loss, paper_loss
+from histomics_detect.models.lnms_loss import normal_loss, clustering_loss, paper_loss, xor_loss
 from histomics_detect.metrics.lnms import calculate_performance_stats_lnms
 
 
@@ -322,10 +322,10 @@ class LearningNMS(tf.keras.Model, ABC):
             # calculate loss
             if self.loss_type == 'dummy':
                 loss = tf.reduce_sum(self.loss_object(nms_output, tf.ones(tf.shape(nms_output))))
-            # elif self.loss_type == 'xor':
-            # TODO implement xor_loss
-            #     cluster_assignment = calculate_cluster_assignment(boxes, rpn_boxes)
-            #     loss, labels = self._cal_xor_loss(nms_output, cluster_assignment)
+            elif self.loss_type == 'xor':
+                cluster_assignment = calculate_cluster_assignment(boxes, rpn_boxes)
+                loss, labels = xor_loss(nms_output, cluster_assignment)
+                # loss, labels = self._cal_xor_loss(nms_output, cluster_assignment)
             elif self.loss_type == 'clustering':
                 cluster_assignment = calculate_cluster_assignment(boxes, rpn_boxes)
                 loss, labels = clustering_loss(nms_output, cluster_assignment, self.loss_object, self.positive_weight,

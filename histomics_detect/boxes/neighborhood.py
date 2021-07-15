@@ -5,7 +5,7 @@ import tensorflow.keras.backend as kb
 from histomics_detect.metrics import iou
 
 
-def assemble_neighborhood(anchor_id: int, interpolated: tf.Tensor, rpn_boxes_positive: tf.Tensor,
+def assemble_neighborhood(anchor_id: int, interpolated: tf.Tensor,
                           neighborhood_indeces: tf.Tensor,
                           neighborhood_additional_info: tf.Tensor, use_image_features: bool = True) -> tf.float32:
     """
@@ -21,9 +21,6 @@ def assemble_neighborhood(anchor_id: int, interpolated: tf.Tensor, rpn_boxes_pos
         id of current prediction in [0, N-1]
     interpolated: tensor (float32)
         N x D interpolated features
-    rpn_boxes_positive: tensor (float32)
-        N x 4 x,y,w,h of the boxes or centroids
-        TODO not used remove
     neighborhood_indeces: tensor (int32)
         S x 2 indeces of predictions in neighborhood
     neighborhood_additional_info: tensor (float32)

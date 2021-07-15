@@ -79,7 +79,7 @@ class BlockModel(tf.keras.Model, ABC):
 
         for block, output in self.blocks:
             # run network on block
-            neighborhoods = assemble_neighborhood(prediction_ids[0], interpolated, rpn_boxes_positive,
+            neighborhoods = assemble_neighborhood(prediction_ids[0], interpolated,
                                                   neighborhoods_indeces[0:neighborhood_sizes[0]],
                                                   neighborhoods_add_info[0:neighborhood_sizes[0]],
                                                   self.use_image_features)
@@ -91,7 +91,7 @@ class BlockModel(tf.keras.Model, ABC):
                 tf.autograph.experimental.set_loop_options(
                     shape_invariants=[(neighborhoods, tf.TensorShape([None, None]))])
                 end_index = start_index + neighborhood_sizes[counter]
-                new_neighborhood = assemble_neighborhood(x, interpolated, rpn_boxes_positive,
+                new_neighborhood = assemble_neighborhood(x, interpolated,
                                                          neighborhoods_indeces[start_index:end_index],
                                                          neighborhoods_add_info[start_index:end_index],
                                                          self.use_image_features)

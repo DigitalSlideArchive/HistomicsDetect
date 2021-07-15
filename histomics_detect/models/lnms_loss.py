@@ -295,7 +295,7 @@ def clustering_loss(nms_output: tf.Tensor, cluster_assignment: tf.Tensor, loss_o
     return tf.reduce_sum(loss), labels
 
 
-def _cal_xor_loss(nms_output: tf.Tensor, cluster_assignment: tf.Tensor):
+def xor_loss(nms_output: tf.Tensor, cluster_assignment: tf.Tensor):
     """ TODO test in pipeline
     xor loss
     the loss is minimal if only one score of each cluster is one and the others are zero
