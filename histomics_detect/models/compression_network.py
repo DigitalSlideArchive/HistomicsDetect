@@ -6,6 +6,19 @@ import tensorflow as tf
 class CompressionNetwork(tf.keras.Model, ABC):
 
     def __init__(self, feature_size: int, anchor_size: int, backbone: tf.keras.Model, *args, **kwargs):
+        """
+        Network for training the compression layers of for the lnms network
+
+        Parameters
+        ----------
+        feature_size: int
+            compression size of the feature
+        anchor_size: int
+        backbone: tf.keras.Model
+            feature extraction model
+        args
+        kwargs
+        """
         super(CompressionNetwork, self).__init__(*args, **kwargs)
         self.feature_size = feature_size
         self.anchor_size = anchor_size
@@ -16,13 +29,13 @@ class CompressionNetwork(tf.keras.Model, ABC):
 
     def _initialize_decompression_layers(self) -> tf.keras.Model:
         """
-                builds the initial feature decompression keras model
+        builds the initial feature decompression keras model
 
-                Returns
-                -------
-                compression_model: tf.keras.Model
-                    compression network that can compress image features
-                """
+        Returns
+        -------
+        compression_model: tf.keras.Model
+            compression network that can compress image features
+        """
         input_layer = tf.keras.Input(shape=[None, None, self.feature_size], name="compressed_input")
         layer_1 = tf.keras.layers.Conv2DTranspose(self.feature_size, 3, activation=self.activation, padding='same',
                                                   name="decompression_layer_1")(input_layer)
