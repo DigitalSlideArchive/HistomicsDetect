@@ -56,7 +56,8 @@ def extract_data(data):
 
 
 class LearningNMS(tf.keras.Model, ABC):
-    def _init_(self, configs: dict, rpnetwork: tf.keras.Model, backbone: tf.keras.Model, shape, *args, **kwargs):
+    def _init_(self, configs: dict, rpnetwork: tf.keras.Model, backbone: tf.keras.Model,
+               compression_network: tf.keras.Model, shape, *args, **kwargs):
         """
         Learning-NMS model for training a Block-Model
 
@@ -92,7 +93,7 @@ class LearningNMS(tf.keras.Model, ABC):
         self.net = BlockModel([self._initialize_block(i) for i in range(self.num_blocks)],
                               self._initialize_final_output(), threshold=self.threshold,
                               train_tile=self.train_tile, use_image_features=self.use_image_features)
-        self.compression_net = self._initialize_compression_layers()
+        self.compression_net = compression_network
 
         # define metrics
         loss_col = tf.keras.metrics.Mean(name='loss')
@@ -103,22 +104,6 @@ class LearningNMS(tf.keras.Model, ABC):
         tn = tf.keras.metrics.Mean(name='tn')
         fn = tf.keras.metrics.Mean(name='fn')
         self.standard = [loss_col, loss_pos, loss_neg, tp, fp, tn, fn]
-
-    def _initialize_compression_layers(self) -> tf.keras.Model:
-        """
-        builds the initial feature compression keras model
-
-        Returns
-        -------
-        compression_model: tf.keras.Model
-            compression network that can compress image features
-        """
-        input_layer = tf.keras.Input(shape=[None, None, self.anchor_size], name="uncompressed_input")
-        layer_1 = tf.keras.layers.Conv2D(self.feature_size, 3, activation=self.activation, padding='same',
-                                         name="compression_layer_1")(input_layer)
-        layer_2 = tf.keras.layers.Conv2D(self.feature_size, 3, activation=self.activation, padding='same',
-                                         name="compression_layer_2")(layer_1)
-        return tf.keras.Model(inputs=input_layer, outputs=layer_2)
 
     def _initialize_final_output(self) -> tf.keras.Model:
         """
