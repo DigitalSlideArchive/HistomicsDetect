@@ -2,7 +2,7 @@ from histomics_detect.anchors.create import create_anchors
 from histomics_detect.anchors.filter import filter_anchors
 from histomics_detect.anchors.sampling import sample_anchors
 from histomics_detect.boxes import parameterize, unparameterize, clip_boxes, tf_box_transform, filter_edge_boxes
-from histomics_detect.metrics import iou, greedy_iou
+from histomics_detect.metrics import iou, greedy_iou, greedy_pr_auc
 from histomics_detect.networks.fast_rcnn import fast_rcnn
 from histomics_detect.networks.field_size import field_size
 from histomics_detect.roialign.roialign import roialign
@@ -69,7 +69,8 @@ def map_outputs(output, anchors, anchor_px, field):
 
 class FasterRCNN(tf.keras.Model):
     def __init__(self, rpnetwork, backbone, shape, anchor_px, lmbda, 
-                 pool=2, tiles=3, nms_iou=0.3, map_iou=0.5,
+                 pool=2, tiles=3, tau=0.5, margin=32,
+                 nms_iou=0.3, map_iou=0.5,
                  **kwargs):        
     
         super(FasterRCNN, self).__init__()
@@ -88,26 +89,64 @@ class FasterRCNN(tf.keras.Model):
         self.pool = pool
         self.tiles = tiles
         
-        #parameters for nms
+        #validation threshold for calling positives
+        self.tau = tau
+        
+        #validation margin for clearing boxes and predictions near image edge
+        self.margin = margin
+        
+        #validation iou threshold for applying nms
         self.nms_iou = nms_iou
-        self.map_iou = map_iou        
+        
+        #validation iou threshold for greedy mapping
+        self.map_iou = map_iou
         
         #generate anchors for training efficiency - works for fixed-size training
         self.anchors = create_anchors(anchor_px, self.field, shape[0], shape[1])
 
         #define metrics
-        mae_xy = tf.keras.metrics.Mean(name='mean_iou_rpn')
-        mae_wh = tf.keras.metrics.Mean(name='mean_iou_align')
-        auc_roc = tf.keras.metrics.AUC(curve="ROC", name='auc_roc')
-        auc_pr = tf.keras.metrics.AUC(curve="PR", name='pr_roc')
-        tp = tf.keras.metrics.TruePositives()
-        fn = tf.keras.metrics.FalseNegatives()
-        fp = tf.keras.metrics.FalsePositives()
-        self.standard = [mae_xy, mae_wh, auc_roc, auc_pr, tp, fn, fp]
+        self.statistics = [tf.keras.metrics.Mean(name='iou'),
+                           tf.keras.metrics.AUC(curve="PR", name='prauc'),
+                           tf.keras.metrics.Recall(name='tpr'),
+                           tf.keras.metrics.FalseNegatives(name='fn'),
+                           tf.keras.metrics.FalsePositives(name='fp')]
 
 
+    def _update_metrics(self, ious, objectness, positive):
+        """Updates tracked performance metrics used in training and validation. 
+        
+        Parameters
+        ----------
+        ious: tensor
+            N length tensor containing the intersection-over-union (iou) values of 
+            predicted objects. Used in calculating mean iou.
+        objectness: tensor
+            N x 2 tensor containing corresponding softmax objectness scores in rows.
+            Second column contains score for being an object.
+        positive: tensor (bool)
+            N length bool tensor indicating which rows contain objects that were
+            judged positive based on 
+            
+        
+        Returns
+        -------
+        metrics: dict
+            Returns a dict of updated metric values keyed by metric names (see 
+            FasterRCNN class constructor).       
+        """
+        
+        #update metrics values
+        self.statistics[0].update_state(ious)
+        self.statistics[1].update_state(tf.cast(positive, tf.uint32), objectness[:,1])
+        self.statistics[2].update_state(tf.cast(positive, tf.uint32), objectness[:,1])
+        self.statistics[3].update_state(tf.cast(positive, tf.uint32), objectness[:,1])
+        self.statistics[4].update_state(tf.cast(positive, tf.uint32), objectness[:,1])
+        
+        return {m.name: m.result() for m in self.metrics}
+    
+        
     @tf.function
-    def threshold(self, boxes, objectness, tau=0.5):
+    def threshold(self, boxes, objectness, tau):
         """Thresholds rpn predictions using objectness score. Helpful for processing
         raw inference results.
         
@@ -121,7 +160,7 @@ class FasterRCNN(tf.keras.Model):
             Second column contains score for being an object.
         tau: float
             Scalar threshold applied to objectness scores to define which rpn 
-            predictions are objects. Range is [0,1]. Default value is 0.5.
+            predictions are objects. Range is [0,1].
         
         Returns
         -------
@@ -132,7 +171,7 @@ class FasterRCNN(tf.keras.Model):
         """
         
         #get binary mask of positive objects
-        mask = tf.greater(objectness[:,1], 0.5)
+        mask = tf.greater(objectness[:,1], tau)
         
         #filter using mask
         filtered_boxes = tf.boolean_mask(boxes, mask, axis=0)
@@ -142,7 +181,7 @@ class FasterRCNN(tf.keras.Model):
         
         
     @tf.function
-    def nms(self, boxes, objectness, nms_iou=0.3):
+    def nms(self, boxes, objectness, nms_iou):
         """Performs nms on regressed boxes returning filtered boxes and corresponding
         objectness scores. Helpful for processing raw inference results.
         
@@ -156,7 +195,7 @@ class FasterRCNN(tf.keras.Model):
             Second column contains score for being an object.
         nms_iou: float
             Scalar threshold used by nms to define overlapping objects. Range is
-            (0,1]. Default value is 0.3.
+            (0,1].
             
         Returns
         -------
@@ -251,7 +290,7 @@ class FasterRCNN(tf.keras.Model):
     
     
     @tf.function
-    def call(self, rgb, threshold=0.5, nms_iou=None):
+    def call(self, rgb, tau=None, nms_iou=None):
         """call() produces thresholded and roialign refined predictions from a trained
         network. This is the most useful for users who don't want to apply their own
         post-processing to rpn results."""
@@ -260,8 +299,10 @@ class FasterRCNN(tf.keras.Model):
         rpn_obj, rpn_boxes, features = self.raw(rgb)
         
         #select rpn proposals
+        if tau is None:
+            tau = self.tau
         rpn_boxes_positive, rpn_obj_positive, positive = self.threshold(rpn_boxes, rpn_obj, 
-                                                                        threshold)
+                                                                        tau)
         
         #perform non-max suppression on rpn positive predictions
         if nms_iou is None:
@@ -276,7 +317,7 @@ class FasterRCNN(tf.keras.Model):
         return align_boxes
 
         
-    @tf.function
+    @tf.function(experimental_relax_shapes=True)
     def test_step(self, data):
         
         #unpack image, boxes, and optional image name
@@ -293,7 +334,7 @@ class FasterRCNN(tf.keras.Model):
         rpn_obj, rpn_boxes, features = self.raw(rgb)
         
         #select rpn proposals
-        rpn_boxes_positive, rpn_obj_positive, positive = self.threshold(rpn_boxes, rpn_obj, 0.5)
+        rpn_boxes_positive, rpn_obj_positive, positive = self.threshold(rpn_boxes, rpn_obj, self.tau)
         
         #perform non-max suppression on boxes
         rpn_boxes_nms, rpn_obj_nms, selected = self.nms(rpn_boxes_positive,
@@ -303,49 +344,35 @@ class FasterRCNN(tf.keras.Model):
         align_boxes_nms = self.align(rpn_boxes_nms, features, self.field, self.pool, self.tiles)
         
         #clear margin of ground truth boxes
-        boxes = filter_edge_boxes(boxes, tf.shape(rgb)[1], tf.shape(rgb)[0], 32)
+        boxes = filter_edge_boxes(boxes, tf.shape(rgb)[1], tf.shape(rgb)[0], self.margin)
         
-        #roialign accuracy measures via greedy iou mapping
-        filtered = filter_edge_boxes(align_boxes_nms, tf.shape(rgb)[1], tf.shape(rgb)[0], 32)
+        #roialign accuracy measures
+        filtered = filter_edge_boxes(align_boxes_nms, tf.shape(rgb)[1], tf.shape(rgb)[0], self.margin)
         align_ious, _ = iou(filtered, boxes)
-        precision, recall, tp, fp, fn, tp_list, fp_list, fn_list = greedy_iou(align_ious, 
-                                                                              self.map_iou)
+        
+        #greedy iou mapping for precision-recall auc
+        precision, recall, tp, fp, fn, tp_list, fp_list, fn_list = greedy_iou(align_ious, self.map_iou)
+        auc = greedy_pr_auc(rpn_obj_nms, rpn_boxes_nms, boxes, delta=0.1, min_iou=self.map_iou)
+        
+        #update console
         tf.print(name)
-        tf.print('align precision: ', precision)
-        tf.print('align recall: ', recall)
-        tf.print('align tp: ', tp)
-        tf.print('align fp: ', fp)
-        tf.print('align fn: ', fn)
+        tf.print('greedy prauc', auc)
+        tf.print('greedy precision: ', precision)
+        tf.print('greedy recall: ', recall)
+        tf.print('greedy tp: ', tp)
+        tf.print('greedy fp: ', fp)
+        tf.print('greedy fn: ', fn)
         
-        #generate measures of negative boxes for performance measurement
-        negative = tf.logical_not(positive)
-        rpn_obj_negative = tf.boolean_mask(rpn_obj, negative, axis=0)
-        rpn_obj_labels = tf.concat([tf.ones(tf.shape(rpn_obj_positive)[0], tf.uint8),
-                                    tf.zeros(tf.shape(rpn_obj_negative)[0], tf.uint8)],
-                                   axis=0)        
+        #reduce max iou for each prediction
+        align_ious = tf.reduce_max(align_ious, axis=1)
         
-        #measurements - objectness pr-auc, rpn pos box iou, align box iou, align box greedy iou
-        #update metrics
-        self.standard[0].update_state(align_ious)
-        self.standard[1].update_state(align_ious)
-        self.standard[2].update_state(rpn_obj_labels, 
-                                      tf.concat([rpn_obj_positive, rpn_obj_negative],
-                                                axis=0)[:,1])
-        self.standard[3].update_state(rpn_obj_labels, 
-                                      tf.concat([rpn_obj_positive, rpn_obj_negative],
-                                                axis=0)[:,1])
-        self.standard[4].update_state(rpn_obj_labels,
-                                      tf.concat([rpn_obj_positive, rpn_obj_negative],
-                                                axis=0)[:,1])
-        self.standard[5].update_state(rpn_obj_labels,
-                                      tf.concat([rpn_obj_positive, rpn_obj_negative],
-                                                axis=0)[:,1])
-        self.standard[6].update_state(rpn_obj_labels,
-                                      tf.concat([rpn_obj_positive, rpn_obj_negative],
-                                                axis=0)[:,1])
+        #measurements - algin iou for positive boxes, and objectness pr-auc, tp, fp, and fn
+        metrics = self._update_metrics(align_ious, rpn_obj, positive)
+
+        #dummy losses
+        losses = {'loss_rpn_obj': 0., 'loss_rpn_reg': 0., 'loss_align_reg': 0.}        
         
-        #return metrics only
-        return {m.name: m.result() for m in self.standard} 
+        return {**losses, **metrics}
     
     
     @tf.function
@@ -426,45 +453,18 @@ class FasterRCNN(tf.keras.Model):
         self.optimizer.apply_gradients(zip(gradients, self.fastrcnn.trainable_weights))
     
         #ious for rpn, roialign
-        rpn_ious, _ = iou(rpn_boxes, boxes)
-        rpn_ious = tf.reduce_max(rpn_ious)
         align_ious, _ = iou(align_boxes, boxes)
-        align_ious = tf.reduce_max(align_ious)
+        align_ious = tf.reduce_max(align_ious, axis=1)
 
         #update metrics
+        metrics = self._update_metrics(align_ious, 
+                                       tf.concat([rpn_obj_positive, 
+                                                  rpn_obj_negative],
+                                                 axis=0),
+                                       rpn_obj_labels)
 
-        self.standard[0].update_state(rpn_ious)
-        self.standard[1].update_state(align_ious)
-        self.standard[2].update_state(rpn_obj_labels, 
-                                      tf.concat([rpn_obj_positive, rpn_obj_negative],
-                                                axis=0)[:,1])
-        self.standard[3].update_state(rpn_obj_labels, 
-                                      tf.concat([rpn_obj_positive, rpn_obj_negative],
-                                                axis=0)[:,1])
-        self.standard[4].update_state(rpn_obj_labels,
-                                      tf.concat([rpn_obj_positive, rpn_obj_negative],
-                                                axis=0)[:,1])
-        self.standard[5].update_state(rpn_obj_labels,
-                                      tf.concat([rpn_obj_positive, rpn_obj_negative],
-                                                axis=0)[:,1])
-        self.standard[6].update_state(rpn_obj_labels,
-                                      tf.concat([rpn_obj_positive, rpn_obj_negative],
-                                                axis=0)[:,1])
-        
-        #build output dicts
-        losses = {'rpn_objectness': rpn_obj_loss, 'rpn_regression': rpn_reg_loss,
-                  'align_regression': align_reg_loss}
-        metrics = {m.name: m.result() for m in self.standard}    
+        #build output loss dict
+        losses = {'loss_rpn_obj': rpn_obj_loss, 'loss_rpn_reg': rpn_reg_loss,
+                  'loss_align_reg': align_reg_loss}
 
         return {**losses, **metrics}
-    
-
-class CustomCallback(tf.keras.callbacks.Callback):
-    def on_epoch_end(self, epoch, logs=None):
-        self.model.standard[0].reset_states()
-        self.model.standard[1].reset_states()
-        self.model.standard[2].reset_states()
-        self.model.standard[3].reset_states()
-        self.model.standard[4].reset_states()
-        self.model.standard[5].reset_states()
-        self.model.standard[6].reset_states()
