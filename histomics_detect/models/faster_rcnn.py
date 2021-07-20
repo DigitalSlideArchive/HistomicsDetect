@@ -345,11 +345,12 @@ class FasterRCNN(tf.keras.Model):
         
         #update console
         tf.print(name)
-        tf.print('align precision: ', precision)
-        tf.print('align recall: ', recall)
-        tf.print('align tp: ', tp)
-        tf.print('align fp: ', fp)
-        tf.print('align fn: ', fn)
+        tf.print('greedy prauc', auc)
+        tf.print('greedy precision: ', precision)
+        tf.print('greedy recall: ', recall)
+        tf.print('greedy tp: ', tp)
+        tf.print('greedy fp: ', fp)
+        tf.print('greedy fn: ', fn)
         
         #reduce max iou for each prediction
         align_ious = tf.reduce_max(align_ious, axis=1)
