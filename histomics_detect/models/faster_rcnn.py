@@ -441,35 +441,19 @@ class FasterRCNN(tf.keras.Model):
         self.optimizer.apply_gradients(zip(gradients, self.fastrcnn.trainable_weights))
     
         #ious for rpn, roialign
-        rpn_ious, _ = iou(rpn_boxes, boxes)
-        rpn_ious = tf.reduce_max(rpn_ious)
         align_ious, _ = iou(align_boxes, boxes)
-        align_ious = tf.reduce_max(align_ious)
+        align_ious = tf.reduce_max(align_ious, axis=1)
 
         #update metrics
+        metrics = self._update_metrics(align_ious, 
+                                       tf.concat([rpn_obj_positive, 
+                                                  rpn_obj_negative],
+                                                 axis=0),
+                                       rpn_obj_labels)
 
-        self.standard[0].update_state(rpn_ious)
-        self.standard[1].update_state(align_ious)
-        self.standard[2].update_state(rpn_obj_labels, 
-                                      tf.concat([rpn_obj_positive, rpn_obj_negative],
-                                                axis=0)[:,1])
-        self.standard[3].update_state(rpn_obj_labels, 
-                                      tf.concat([rpn_obj_positive, rpn_obj_negative],
-                                                axis=0)[:,1])
-        self.standard[4].update_state(rpn_obj_labels,
-                                      tf.concat([rpn_obj_positive, rpn_obj_negative],
-                                                axis=0)[:,1])
-        self.standard[5].update_state(rpn_obj_labels,
-                                      tf.concat([rpn_obj_positive, rpn_obj_negative],
-                                                axis=0)[:,1])
-        self.standard[6].update_state(rpn_obj_labels,
-                                      tf.concat([rpn_obj_positive, rpn_obj_negative],
-                                                axis=0)[:,1])
-        
-        #build output dicts
-        losses = {'rpn_objectness': rpn_obj_loss, 'rpn_regression': rpn_reg_loss,
-                  'align_regression': align_reg_loss}
-        metrics = {m.name: m.result() for m in self.standard}    
+        #build output loss dict
+        losses = {'loss_rpn_obj': rpn_obj_loss, 'loss_rpn_reg': rpn_reg_loss,
+                  'loss_align_reg': align_reg_loss}
 
         return {**losses, **metrics}
     
