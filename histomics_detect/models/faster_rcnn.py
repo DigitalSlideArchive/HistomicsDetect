@@ -106,6 +106,39 @@ class FasterRCNN(tf.keras.Model):
         self.standard = [mae_xy, mae_wh, auc_roc, auc_pr, tp, fn, fp]
 
 
+    def _update_metrics(self, ious, objectness, positive):
+        """Updates tracked performance metrics used in training and validation. 
+        
+        Parameters
+        ----------
+        ious: tensor
+            N length tensor containing the intersection-over-union (iou) values of 
+            predicted objects. Used in calculating mean iou.
+        objectness: tensor
+            N x 2 tensor containing corresponding softmax objectness scores in rows.
+            Second column contains score for being an object.
+        positive: tensor (bool)
+            N length bool tensor indicating which rows contain objects that were
+            judged positive based on 
+            
+        
+        Returns
+        -------
+        metrics: dict
+            Returns a dict of updated metric values keyed by metric names (see 
+            FasterRCNN class constructor).       
+        """
+        
+        #update metrics values
+        self.statistics[0].update_state(ious)
+        self.statistics[1].update_state(tf.cast(positive, tf.uint32), objectness[:,1])
+        self.statistics[2].update_state(tf.cast(positive, tf.uint32), objectness[:,1])
+        self.statistics[3].update_state(tf.cast(positive, tf.uint32), objectness[:,1])
+        self.statistics[4].update_state(tf.cast(positive, tf.uint32), objectness[:,1])
+        
+        return {m.name: m.result() for m in self.metrics}
+    
+        
     @tf.function
     def threshold(self, boxes, objectness, tau=0.5):
         """Thresholds rpn predictions using objectness score. Helpful for processing
