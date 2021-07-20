@@ -2,7 +2,7 @@ from histomics_detect.anchors.create import create_anchors
 from histomics_detect.anchors.filter import filter_anchors
 from histomics_detect.anchors.sampling import sample_anchors
 from histomics_detect.boxes import parameterize, unparameterize, clip_boxes, tf_box_transform, filter_edge_boxes
-from histomics_detect.metrics import iou, greedy_iou
+from histomics_detect.metrics import iou, greedy_iou, greedy_pr_auc
 from histomics_detect.networks.fast_rcnn import fast_rcnn
 from histomics_detect.networks.field_size import field_size
 from histomics_detect.roialign.roialign import roialign
