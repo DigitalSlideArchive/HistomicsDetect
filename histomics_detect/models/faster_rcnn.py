@@ -306,7 +306,7 @@ class FasterRCNN(tf.keras.Model):
         return align_boxes
 
         
-    @tf.function
+    @tf.function(experimental_relax_shapes=True)
     def test_step(self, data):
         
         #unpack image, boxes, and optional image name
@@ -335,11 +335,15 @@ class FasterRCNN(tf.keras.Model):
         #clear margin of ground truth boxes
         boxes = filter_edge_boxes(boxes, tf.shape(rgb)[1], tf.shape(rgb)[0], 32)
         
-        #roialign accuracy measures via greedy iou mapping
+        #roialign accuracy measures
         filtered = filter_edge_boxes(align_boxes_nms, tf.shape(rgb)[1], tf.shape(rgb)[0], 32)
         align_ious, _ = iou(filtered, boxes)
-        precision, recall, tp, fp, fn, tp_list, fp_list, fn_list = greedy_iou(align_ious, 
-                                                                              self.map_iou)
+        
+        #greedy iou mapping for precision-recall auc
+        precision, recall, tp, fp, fn, tp_list, fp_list, fn_list = greedy_iou(align_ious, self.map_iou)
+        auc = greedy_pr_auc(rpn_obj_nms, rpn_boxes_nms, boxes, delta=0.1, min_iou=self.map_iou)
+        
+        #update console
         tf.print(name)
         tf.print('align precision: ', precision)
         tf.print('align recall: ', recall)
@@ -347,35 +351,16 @@ class FasterRCNN(tf.keras.Model):
         tf.print('align fp: ', fp)
         tf.print('align fn: ', fn)
         
-        #generate measures of negative boxes for performance measurement
-        negative = tf.logical_not(positive)
-        rpn_obj_negative = tf.boolean_mask(rpn_obj, negative, axis=0)
-        rpn_obj_labels = tf.concat([tf.ones(tf.shape(rpn_obj_positive)[0], tf.uint8),
-                                    tf.zeros(tf.shape(rpn_obj_negative)[0], tf.uint8)],
-                                   axis=0)        
+        #reduce max iou for each prediction
+        align_ious = tf.reduce_max(align_ious, axis=1)
         
-        #measurements - objectness pr-auc, rpn pos box iou, align box iou, align box greedy iou
-        #update metrics
-        self.standard[0].update_state(align_ious)
-        self.standard[1].update_state(align_ious)
-        self.standard[2].update_state(rpn_obj_labels, 
-                                      tf.concat([rpn_obj_positive, rpn_obj_negative],
-                                                axis=0)[:,1])
-        self.standard[3].update_state(rpn_obj_labels, 
-                                      tf.concat([rpn_obj_positive, rpn_obj_negative],
-                                                axis=0)[:,1])
-        self.standard[4].update_state(rpn_obj_labels,
-                                      tf.concat([rpn_obj_positive, rpn_obj_negative],
-                                                axis=0)[:,1])
-        self.standard[5].update_state(rpn_obj_labels,
-                                      tf.concat([rpn_obj_positive, rpn_obj_negative],
-                                                axis=0)[:,1])
-        self.standard[6].update_state(rpn_obj_labels,
-                                      tf.concat([rpn_obj_positive, rpn_obj_negative],
-                                                axis=0)[:,1])
+        #measurements - algin iou for positive boxes, and objectness pr-auc, tp, fp, and fn
+        metrics = self._update_metrics(align_ious, rpn_obj, positive)
+
+        #dummy losses
+        losses = {'loss_rpn_obj': 0., 'loss_rpn_reg': 0., 'loss_align_reg': 0.}        
         
-        #return metrics only
-        return {m.name: m.result() for m in self.standard} 
+        return {**losses, **metrics}
     
     
     @tf.function
