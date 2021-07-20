@@ -456,14 +456,3 @@ class FasterRCNN(tf.keras.Model):
                   'loss_align_reg': align_reg_loss}
 
         return {**losses, **metrics}
-    
-
-class CustomCallback(tf.keras.callbacks.Callback):
-    def on_epoch_end(self, epoch, logs=None):
-        self.model.standard[0].reset_states()
-        self.model.standard[1].reset_states()
-        self.model.standard[2].reset_states()
-        self.model.standard[3].reset_states()
-        self.model.standard[4].reset_states()
-        self.model.standard[5].reset_states()
-        self.model.standard[6].reset_states()
