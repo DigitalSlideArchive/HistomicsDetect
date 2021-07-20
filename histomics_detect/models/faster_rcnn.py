@@ -96,14 +96,11 @@ class FasterRCNN(tf.keras.Model):
         self.anchors = create_anchors(anchor_px, self.field, shape[0], shape[1])
 
         #define metrics
-        mae_xy = tf.keras.metrics.Mean(name='mean_iou_rpn')
-        mae_wh = tf.keras.metrics.Mean(name='mean_iou_align')
-        auc_roc = tf.keras.metrics.AUC(curve="ROC", name='auc_roc')
-        auc_pr = tf.keras.metrics.AUC(curve="PR", name='pr_roc')
-        tp = tf.keras.metrics.TruePositives()
-        fn = tf.keras.metrics.FalseNegatives()
-        fp = tf.keras.metrics.FalsePositives()
-        self.standard = [mae_xy, mae_wh, auc_roc, auc_pr, tp, fn, fp]
+        self.statistics = [tf.keras.metrics.Mean(name='iou'),
+                           tf.keras.metrics.AUC(curve="PR", name='prauc'),
+                           tf.keras.metrics.Recall(name='tpr'),
+                           tf.keras.metrics.FalseNegatives(name='fn'),
+                           tf.keras.metrics.FalsePositives(name='fp')]
 
 
     def _update_metrics(self, ious, objectness, positive):
