@@ -69,7 +69,8 @@ def map_outputs(output, anchors, anchor_px, field):
 
 class FasterRCNN(tf.keras.Model):
     def __init__(self, rpnetwork, backbone, shape, anchor_px, lmbda, 
-                 pool=2, tiles=3, nms_iou=0.3, map_iou=0.5,
+                 pool=2, tiles=3, tau=0.5, margin=32,
+                 nms_iou=0.3, map_iou=0.5,
                  **kwargs):        
     
         super(FasterRCNN, self).__init__()
@@ -88,9 +89,17 @@ class FasterRCNN(tf.keras.Model):
         self.pool = pool
         self.tiles = tiles
         
-        #parameters for nms
+        #validation threshold for calling positives
+        self.tau = tau
+        
+        #validation margin for clearing boxes and predictions near image edge
+        self.margin = margin
+        
+        #validation iou threshold for applying nms
         self.nms_iou = nms_iou
-        self.map_iou = map_iou        
+        
+        #validation iou threshold for greedy mapping
+        self.map_iou = map_iou
         
         #generate anchors for training efficiency - works for fixed-size training
         self.anchors = create_anchors(anchor_px, self.field, shape[0], shape[1])
@@ -137,7 +146,7 @@ class FasterRCNN(tf.keras.Model):
     
         
     @tf.function
-    def threshold(self, boxes, objectness, tau=0.5):
+    def threshold(self, boxes, objectness, tau):
         """Thresholds rpn predictions using objectness score. Helpful for processing
         raw inference results.
         
@@ -151,7 +160,7 @@ class FasterRCNN(tf.keras.Model):
             Second column contains score for being an object.
         tau: float
             Scalar threshold applied to objectness scores to define which rpn 
-            predictions are objects. Range is [0,1]. Default value is 0.5.
+            predictions are objects. Range is [0,1].
         
         Returns
         -------
@@ -162,7 +171,7 @@ class FasterRCNN(tf.keras.Model):
         """
         
         #get binary mask of positive objects
-        mask = tf.greater(objectness[:,1], 0.5)
+        mask = tf.greater(objectness[:,1], tau)
         
         #filter using mask
         filtered_boxes = tf.boolean_mask(boxes, mask, axis=0)
@@ -172,7 +181,7 @@ class FasterRCNN(tf.keras.Model):
         
         
     @tf.function
-    def nms(self, boxes, objectness, nms_iou=0.3):
+    def nms(self, boxes, objectness, nms_iou):
         """Performs nms on regressed boxes returning filtered boxes and corresponding
         objectness scores. Helpful for processing raw inference results.
         
@@ -186,7 +195,7 @@ class FasterRCNN(tf.keras.Model):
             Second column contains score for being an object.
         nms_iou: float
             Scalar threshold used by nms to define overlapping objects. Range is
-            (0,1]. Default value is 0.3.
+            (0,1].
             
         Returns
         -------
@@ -281,7 +290,7 @@ class FasterRCNN(tf.keras.Model):
     
     
     @tf.function
-    def call(self, rgb, threshold=0.5, nms_iou=None):
+    def call(self, rgb, tau=None, nms_iou=None):
         """call() produces thresholded and roialign refined predictions from a trained
         network. This is the most useful for users who don't want to apply their own
         post-processing to rpn results."""
@@ -290,8 +299,10 @@ class FasterRCNN(tf.keras.Model):
         rpn_obj, rpn_boxes, features = self.raw(rgb)
         
         #select rpn proposals
+        if tau is None:
+            tau = self.tau
         rpn_boxes_positive, rpn_obj_positive, positive = self.threshold(rpn_boxes, rpn_obj, 
-                                                                        threshold)
+                                                                        tau)
         
         #perform non-max suppression on rpn positive predictions
         if nms_iou is None:
@@ -323,7 +334,7 @@ class FasterRCNN(tf.keras.Model):
         rpn_obj, rpn_boxes, features = self.raw(rgb)
         
         #select rpn proposals
-        rpn_boxes_positive, rpn_obj_positive, positive = self.threshold(rpn_boxes, rpn_obj, 0.5)
+        rpn_boxes_positive, rpn_obj_positive, positive = self.threshold(rpn_boxes, rpn_obj, self.tau)
         
         #perform non-max suppression on boxes
         rpn_boxes_nms, rpn_obj_nms, selected = self.nms(rpn_boxes_positive,
@@ -333,10 +344,10 @@ class FasterRCNN(tf.keras.Model):
         align_boxes_nms = self.align(rpn_boxes_nms, features, self.field, self.pool, self.tiles)
         
         #clear margin of ground truth boxes
-        boxes = filter_edge_boxes(boxes, tf.shape(rgb)[1], tf.shape(rgb)[0], 32)
+        boxes = filter_edge_boxes(boxes, tf.shape(rgb)[1], tf.shape(rgb)[0], self.margin)
         
         #roialign accuracy measures
-        filtered = filter_edge_boxes(align_boxes_nms, tf.shape(rgb)[1], tf.shape(rgb)[0], 32)
+        filtered = filter_edge_boxes(align_boxes_nms, tf.shape(rgb)[1], tf.shape(rgb)[0], self.margin)
         align_ious, _ = iou(filtered, boxes)
         
         #greedy iou mapping for precision-recall auc
