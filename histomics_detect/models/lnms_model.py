@@ -251,7 +251,6 @@ class LearningNMS(tf.keras.Model, ABC):
         self.train_step(inputs)
 
     def test_step(self, data):
-        # TODO test test_steps
         norm, boxes, sample_weight = extract_data(data)
 
         features, rpn_boxes, scores = self.extract_boxes_n_scores(norm)
@@ -263,6 +262,10 @@ class LearningNMS(tf.keras.Model, ABC):
         # run network
         nms_output = self.net((interpolated, rpn_boxes), training=True)
 
+        self._cal_update_performance_stats(boxes, rpn_boxes, nms_output)
+
+
+    def _cal_update_performance_stats(self, boxes, rpn_boxes, nms_output):
         tp, tn, fp, fn = calculate_performance_stats_lnms(boxes, rpn_boxes, nms_output)
         self.standard[3].update_state(tp)
         self.standard[4].update_state(fp)
@@ -331,5 +334,8 @@ class LearningNMS(tf.keras.Model, ABC):
             self.optimizer.apply_gradients(zip(gradients, self.compression_net.trainable_weights))
 
         self.standard[0].update_state(loss + 1e-8)
+
+        if self.calculate_train_metrics:
+            self._cal_update_performance_stats(boxes, rpn_boxes, nms_output)
 
         return loss
