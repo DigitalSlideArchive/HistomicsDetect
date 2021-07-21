@@ -251,6 +251,7 @@ class LearningNMS(tf.keras.Model, ABC):
         self.train_step(inputs)
 
     def test_step(self, data):
+        # TODO test test_steps
         norm, boxes, sample_weight = extract_data(data)
 
         features, rpn_boxes, scores = self.extract_boxes_n_scores(norm)

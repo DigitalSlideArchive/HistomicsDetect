@@ -323,6 +323,9 @@ def xor_loss(nms_output: tf.Tensor, cluster_assignment: tf.Tensor):
     loss: float
         calculated loss
     """
+    # TODO find error cause
+    # TODO add optional neg pos loss calculation
+
     def cluster_sum(i) -> tf.float32:
         pred_indexes = tf.where(tf.equal(tf.cast(cluster_assignment, tf.float32), tf.cast(i, tf.float32)))
         predictions = tf.gather_nd(nms_output, pred_indexes)
