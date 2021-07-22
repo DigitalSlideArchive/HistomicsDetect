@@ -76,11 +76,10 @@ class CompressionNetwork(tf.keras.Model, ABC):
             network_output = self(features)
             loss = self.loss(network_output, features)
 
-        gradients = tape.gradient(loss, self.compression_layers.trainable_weights)
-        self.optimizer.apply_gradients(zip(gradients, self.compression_layers.trainable_weights))
-
-        gradients = tape.gradient(loss, self.decompression_layers.trainable_weights)
-        self.optimizer.apply_gradients(zip(gradients, self.decompression_layers.trainable_weights))
+        gradients = tape.gradient(loss, self.compression_layers.trainable_weights +
+                                  self.decompression_layers.trainable_weights)
+        self.optimizer.apply_gradients(zip(gradients, self.compression_layers.trainable_weights +
+                                           self.decompression_layers.trainable_weights))
 
         # save loss and metrics
         losses = {'loss': loss}

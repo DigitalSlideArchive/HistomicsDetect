@@ -2,7 +2,7 @@ from abc import ABC
 from typing import Tuple, List
 import tensorflow as tf
 
-from histomics_detect.boxes.neighborhood import assemble_neighborhood, get_neighborhood_additional_information
+from histomics_detect.boxes.neighborhood import assemble_single_neighborhood, all_neighborhoods_additional_info
 
 
 class BlockModel(tf.keras.Model, ABC):
@@ -74,15 +74,15 @@ class BlockModel(tf.keras.Model, ABC):
         num_predictions = tf.shape(rpn_boxes_positive)[0]
         prediction_ids = tf.range(0, num_predictions)
 
-        neighborhood_sizes, neighborhoods_add_info, neighborhoods_indeces = get_neighborhood_additional_information(
-            rpn_boxes_positive, prediction_ids, self.use_centroids, self.train_tile, self.threshold)
+        neighborhood_sizes, neighborhoods_add_info, neighborhoods_indeces = all_neighborhoods_additional_info(
+            rpn_boxes_positive, prediction_ids, self.train_tile, self.threshold)
 
         for block, output in self.blocks:
             # run network on block
-            neighborhoods = assemble_neighborhood(prediction_ids[0], interpolated,
-                                                  neighborhoods_indeces[0:neighborhood_sizes[0]],
-                                                  neighborhoods_add_info[0:neighborhood_sizes[0]],
-                                                  self.use_image_features)
+            neighborhoods = assemble_single_neighborhood(prediction_ids[0], interpolated,
+                                                         neighborhoods_indeces[0:neighborhood_sizes[0]],
+                                                         neighborhoods_add_info[0:neighborhood_sizes[0]],
+                                                         self.use_image_features)
             start_index = neighborhood_sizes[0]
             counter = 1
 
@@ -91,10 +91,10 @@ class BlockModel(tf.keras.Model, ABC):
                 tf.autograph.experimental.set_loop_options(
                     shape_invariants=[(neighborhoods, tf.TensorShape([None, None]))])
                 end_index = start_index + neighborhood_sizes[counter]
-                new_neighborhood = assemble_neighborhood(x, interpolated,
-                                                         neighborhoods_indeces[start_index:end_index],
-                                                         neighborhoods_add_info[start_index:end_index],
-                                                         self.use_image_features)
+                new_neighborhood = assemble_single_neighborhood(x, interpolated,
+                                                                neighborhoods_indeces[start_index:end_index],
+                                                                neighborhoods_add_info[start_index:end_index],
+                                                                self.use_image_features)
 
                 start_index = end_index
                 counter += 1

@@ -58,21 +58,26 @@ def normal_loss(loss_object: tf.keras.losses.Loss, boxes: tf.Tensor, rpn_boxes_p
     """
     ious, _ = iou(boxes, rpn_boxes_positive)
 
-    def func(i) -> tf.int32:
+    # function that finds prediction with highest overlap to ground truth
+    def find_assignment(i) -> tf.int32:
         index = tf.cast(i, tf.int32)
         assignment = tf.cast(tf.argmax(ious[index]), tf.int32)
         return assignment
 
-    indexes = tf.map_fn(lambda x: func(x), tf.range(0, tf.shape(ious)[0]))
+    indexes = tf.map_fn(lambda x: find_assignment(x), tf.range(0, tf.shape(ious)[0]))
     indexes = tf.expand_dims(indexes, axis=1)
+    # expand collected indexes to labels vector
     labels = tf.scatter_nd(indexes, tf.ones(tf.shape(indexes)), tf.shape(nms_output))
 
+    # calculate negative and positive labels loss for comparing experiment
     if neg_pos_loss:
         (pos_loss, neg_loss), (positive_labels, negative_labels) = _pos_neg_loss_calculation(nms_output, labels,
                                                                                              loss_object, standard)
+        # use negative or positive for training model
         if use_pos_neg_loss:
             return pos_loss * positive_weight + neg_loss, indexes
 
+    # weigh loss
     if weighted_loss:
         num_pos = tf.cast(tf.size(positive_labels), tf.float32)
         num_neg = tf.cast(tf.size(negative_labels), tf.float32)
@@ -138,7 +143,7 @@ def paper_loss(boxes: tf.Tensor, rpn_boxes_positive: tf.Tensor, nms_output: tf.T
     """
     ious, _ = iou(boxes, rpn_boxes_positive)
 
-    # calculate the labels
+    # function that finds prediction with highest overlap to ground truth
     def func(i) -> tf.int32:
         index = tf.cast(i, tf.int32)
         assignment = tf.cast(tf.argmax(ious[index]), tf.int32)
@@ -266,9 +271,9 @@ def clustering_loss(nms_output: tf.Tensor, cluster_assignment: tf.Tensor, loss_o
         loss value
     indexes: tensor (float32)
         indexes of the values that correspond to positive anchors
-
     """
 
+    # find prediction index with highest objectiveness in cluster
     def func(i) -> tf.int32:
         index = tf.cast(i, tf.int32)
         max_index = tf.argmax(

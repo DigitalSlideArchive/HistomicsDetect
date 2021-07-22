@@ -8,7 +8,7 @@ from .transforms import tf_box_transform
 from .transforms import parameterize
 from .transforms import unparameterize
 from .transforms import filter_edge_boxes
-from .neighborhood import assemble_neighborhood, get_neighborhood_additional_information
+from .neighborhood import assemble_single_neighborhood, all_neighborhoods_additional_info
 
 # list out things that are available for public use
 __all__ = (
@@ -19,6 +19,6 @@ __all__ = (
     'parameterize',
     'unparameterize',
     'filter_edge_boxes',
-    'assemble_neighborhood',
-    'get_neighborhood_additional_information'
+    'assemble_single_neighborhood',
+    'all_neighborhoods_additional_info'
 )

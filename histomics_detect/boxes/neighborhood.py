@@ -5,9 +5,9 @@ import tensorflow.keras.backend as kb
 from histomics_detect.metrics import iou
 
 
-def assemble_neighborhood(anchor_id: int, interpolated: tf.Tensor,
-                          neighborhood_indeces: tf.Tensor,
-                          neighborhood_additional_info: tf.Tensor, use_image_features: bool = True) -> tf.float32:
+def assemble_single_neighborhood(anchor_id: int, interpolated: tf.Tensor, neighborhood_indeces: tf.Tensor,
+                                 neighborhood_additional_info: tf.Tensor, use_image_features: bool = True) \
+        -> tf.float32:
     """
     assembles the neighborhood of a single prediction
 
@@ -53,9 +53,9 @@ def assemble_neighborhood(anchor_id: int, interpolated: tf.Tensor,
     return concatenated_neighborhood
 
 
-def assemble_neighborhood_additional_information(anchor_id, ious, rpn_boxes_positive, use_centroids,
-                                                 normalization_factor: float,
-                                                 threshold: Union[float, tf.Tensor]):
+def single_neighborhood_additional_info(anchor_id, ious, rpn_boxes_positive,
+                                        normalization_factor: float,
+                                        threshold: Union[float, tf.Tensor]):
     """
     assembles additional information of a certain neighborhood
     also assembles the neighborhood_indeces
@@ -76,8 +76,6 @@ def assemble_neighborhood_additional_information(anchor_id, ious, rpn_boxes_posi
         distance normalization devider
     threshold:
         threshold for neighborhood
-    use_centroids:
-        boolean whether centroids or bounding boxes are used
 
     Returns
     -------
@@ -91,10 +89,9 @@ def assemble_neighborhood_additional_information(anchor_id, ious, rpn_boxes_posi
     neighborhood_indexes: tensor (float32)
         indexes of the other anchors that are in the neighborhood of the current anchor
     """
-    multiplier = -1 if use_centroids else 1
     anchor_id = tf.cast(anchor_id, tf.int32)
 
-    neighborhood_indexes = tf.where(tf.greater(multiplier * ious[:, anchor_id], multiplier * threshold))
+    neighborhood_indexes = tf.where(tf.greater(ious[:, anchor_id], threshold))
 
     # prepare boxes for collecting additional feature values
     neighborhood_boxes = tf.gather(rpn_boxes_positive, neighborhood_indexes)
@@ -109,19 +106,15 @@ def assemble_neighborhood_additional_information(anchor_id, ious, rpn_boxes_posi
                                  axis=1)
 
     # concatenate neighborhood vector representations
-    if not use_centroids:
-        scale_difference = kb.log(kb.abs(neighborhood_boxes[:, 2:] / (rpn_boxes_positive[anchor_id, 2:] + 1e-8)) + 1e-8)
-        additional_info = tf.concat([collected_ious, normalized_distance,
-                                     l2_distance, scale_difference], axis=1)
-    else:
-        additional_info = tf.concat([collected_ious, normalized_distance,
-                                     l2_distance], axis=1)
+    scale_difference = kb.log(kb.abs(neighborhood_boxes[:, 2:] / (rpn_boxes_positive[anchor_id, 2:] + 1e-8)) + 1e-8)
+    additional_info = tf.concat([collected_ious, normalized_distance,
+                                 l2_distance, scale_difference], axis=1)
     return additional_info, neighborhood_indexes
 
 
-def get_neighborhood_additional_information(rpn_boxes_positive, prediction_ids, use_centroids,
-                                            normalization_factor: float,
-                                            threshold: Union[float, tf.Tensor]):
+def all_neighborhoods_additional_info(rpn_boxes_positive, prediction_ids,
+                                      normalization_factor: float,
+                                      threshold: Union[float, tf.Tensor]):
     """
     collect additional info and indexes for all neighborhoods
 
@@ -139,8 +132,6 @@ def get_neighborhood_additional_information(rpn_boxes_positive, prediction_ids, 
         distance normalization divider
     threshold: float
         threshold for neighborhood
-    use_centroids: bool
-        boolean whether centroids or bounding boxes are used
 
     Returns
     -------
@@ -153,15 +144,11 @@ def get_neighborhood_additional_information(rpn_boxes_positive, prediction_ids, 
     """
 
     # calculate distance or ious
-    if use_centroids:
-        # TODO implement distance metric
-        ious = ...
-    else:
-        ious, _ = iou(rpn_boxes_positive, rpn_boxes_positive)
+    ious, _ = iou(rpn_boxes_positive, rpn_boxes_positive)
 
     neighborhood_sizes = tf.TensorArray(tf.int32, size=tf.shape(rpn_boxes_positive)[0])
-    neighborhoods_additional_info, neighborhoods_indexes = assemble_neighborhood_additional_information(
-        prediction_ids[0], ious, rpn_boxes_positive, use_centroids, normalization_factor, threshold)
+    neighborhoods_additional_info, neighborhoods_indexes = single_neighborhood_additional_info(
+        prediction_ids[0], ious, rpn_boxes_positive, normalization_factor, threshold)
     neighborhood_sizes = neighborhood_sizes.write(0, tf.shape(neighborhoods_additional_info)[0])
 
     # assemble neighborhoods
@@ -169,8 +156,8 @@ def get_neighborhood_additional_information(rpn_boxes_positive, prediction_ids, 
         tf.autograph.experimental.set_loop_options(
             shape_invariants=[(neighborhoods_additional_info, tf.TensorShape([None, None])),
                               (neighborhoods_indexes, tf.TensorShape([None, None]))])
-        new_neighborhood, new_indexes = assemble_neighborhood_additional_information(
-            x, ious, rpn_boxes_positive, use_centroids, normalization_factor, threshold)
+        new_neighborhood, new_indexes = single_neighborhood_additional_info(
+            x, ious, rpn_boxes_positive, normalization_factor, threshold)
 
         neighborhood_sizes = neighborhood_sizes.write(x, tf.shape(new_neighborhood)[0])
         neighborhoods_additional_info = tf.concat([neighborhoods_additional_info, new_neighborhood], axis=0)

@@ -7,52 +7,10 @@ from histomics_detect.models.block_model import BlockModel
 from histomics_detect.roialign.roialign import roialign
 from histomics_detect.models.faster_rcnn import map_outputs
 from histomics_detect.boxes.transforms import unparameterize
-from histomics_detect.boxes.match import calculate_cluster_assignment
+from histomics_detect.boxes.match import cluster_assignment
 from histomics_detect.models.lnms_loss import normal_loss, clustering_loss, paper_loss, xor_loss
-from histomics_detect.metrics.lnms import calculate_performance_stats_lnms
-
-
-def extract_data(data):
-    """
-    extracts image and boxes from the data
-
-    Parameters
-    ----------
-    data
-
-    - D: number of ground truth boxes
-
-    Returns
-    -------
-    norm: tensor (float32)
-        normalized image
-    boxes: tensor (float32)
-        shape: D x 4
-        ground truth boxes for the given image
-    sample_weight: string
-        name of the image
-    """
-    if len(data) == 3:
-        rgb, boxes, sample_weight = data
-    else:
-        rgb, boxes = data
-        sample_weight = None
-
-    rgb = tf.squeeze(rgb)
-
-    # convert boxes from RaggedTensor
-    expand_fn = lambda x: tf.expand_dims(x, axis=0)
-    boxes = boxes.to_tensor()
-    boxes = tf.squeeze(boxes)
-    boxes = tf.cond(tf.size(tf.shape(boxes)) == 1, lambda: expand_fn(boxes), lambda: boxes)
-
-    # normalize image
-    norm = tf.keras.applications.resnet.preprocess_input(tf.cast(rgb, tf.float32))
-
-    # expand dimensions
-    norm = tf.expand_dims(norm, axis=0)
-
-    return norm, boxes, sample_weight
+from histomics_detect.metrics.lnms import lnms_metrics
+from histomics_detect.models.model_utils import extract_data
 
 
 class LearningNMS(tf.keras.Model, ABC):
@@ -240,8 +198,7 @@ class LearningNMS(tf.keras.Model, ABC):
         scores = rpn_obj[:, 1] / (tf.reduce_sum(rpn_obj, axis=1))
 
         # filter out negative predictions
-        # TODO make threshold variable
-        condition = tf.where(tf.greater(scores, 0.3))
+        condition = tf.where(tf.greater(scores, self.initial_prediction_threshold))
         rpn_boxes = tf.gather_nd(rpn_boxes, condition)
         scores = tf.expand_dims(tf.gather_nd(scores, condition), axis=1)
 
@@ -264,9 +221,8 @@ class LearningNMS(tf.keras.Model, ABC):
 
         self._cal_update_performance_stats(boxes, rpn_boxes, nms_output)
 
-
     def _cal_update_performance_stats(self, boxes, rpn_boxes, nms_output):
-        tp, tn, fp, fn = calculate_performance_stats_lnms(boxes, rpn_boxes, nms_output)
+        tp, tn, fp, fn = lnms_metrics(boxes, rpn_boxes, nms_output)
         self.standard[3].update_state(tp)
         self.standard[4].update_state(fp)
         self.standard[5].update_state(tn)
@@ -312,11 +268,11 @@ class LearningNMS(tf.keras.Model, ABC):
             if self.loss_type == 'dummy':
                 loss = tf.reduce_sum(self.loss_object(nms_output, tf.ones(tf.shape(nms_output))))
             elif self.loss_type == 'xor':
-                cluster_assignment = calculate_cluster_assignment(boxes, rpn_boxes)
+                cluster_assignment = cluster_assignment(boxes, rpn_boxes)
                 loss, labels = xor_loss(nms_output, cluster_assignment)
                 # loss, labels = self._cal_xor_loss(nms_output, cluster_assignment)
             elif self.loss_type == 'clustering':
-                cluster_assignment = calculate_cluster_assignment(boxes, rpn_boxes)
+                cluster_assignment = cluster_assignment(boxes, rpn_boxes)
                 loss, labels = clustering_loss(nms_output, cluster_assignment, self.loss_object, self.positive_weight,
                                                self.standard, self.weighted_loss, self.neg_pos_loss)
             elif self.loss_type == 'paper':

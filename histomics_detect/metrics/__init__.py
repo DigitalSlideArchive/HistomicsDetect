@@ -7,7 +7,7 @@ from .iou import iou
 from .iou import greedy_iou
 from .pr import greedy_pr
 from .pr import greedy_pr_auc
-from .lnms import calculate_performance_stats_lnms
+from .lnms import lnms_metrics
 
 # list out things that are available for public use
 __all__ = (
@@ -17,5 +17,5 @@ __all__ = (
     'greedy_iou',
     'greedy_pr',
     'greedy_pr_auc',
-    'calculate_performance_stats_lnms'
+    'lnms_metrics'
 )

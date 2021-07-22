@@ -4,7 +4,8 @@ from typing import Tuple
 from histomics_detect.metrics import iou
 
 
-def calculate_performance_stats_lnms(boxes: tf.Tensor, rpn_boxes: tf.Tensor, scores: tf.Tensor) -> Tuple[int, int, int, int]:
+def lnms_metrics(boxes: tf.Tensor, rpn_boxes: tf.Tensor, scores: tf.Tensor) \
+        -> Tuple[int, int, int, int]:
     """
     calculates the number of true positives, false positives, true negatives, false negatives of the
     score prediction
