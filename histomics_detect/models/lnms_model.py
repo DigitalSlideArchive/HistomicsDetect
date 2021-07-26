@@ -14,8 +14,8 @@ from histomics_detect.models.model_utils import extract_data
 
 
 class LearningNMS(tf.keras.Model, ABC):
-    def _init_(self, configs: dict, rpnetwork: tf.keras.Model, backbone: tf.keras.Model,
-               compression_network: tf.keras.Model, shape, *args, **kwargs):
+    def __init__(self, configs: dict, rpnetwork: tf.keras.Model, backbone: tf.keras.Model,
+                 compression_network: tf.keras.Model, shape, *args, **kwargs):
         """
         Learning-NMS model for training a Block-Model
 
