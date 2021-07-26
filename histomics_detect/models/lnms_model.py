@@ -7,7 +7,6 @@ from histomics_detect.models.block_model import BlockModel
 from histomics_detect.roialign.roialign import roialign
 from histomics_detect.models.faster_rcnn import map_outputs
 from histomics_detect.boxes.transforms import unparameterize
-from histomics_detect.boxes.match import cluster_assignment
 from histomics_detect.models.lnms_loss import normal_loss, clustering_loss, paper_loss, xor_loss
 from histomics_detect.metrics.lnms import lnms_metrics
 from histomics_detect.models.model_utils import extract_data
@@ -113,10 +112,7 @@ class LearningNMS(tf.keras.Model, ABC):
             block keras model, output keras model
         """
 
-        if self.use_centroids:
-            shape = 4 + (2 * self.feature_size + 2 if self.use_image_features else 2)
-        else:
-            shape = 6 + (2 * self.feature_size + 2 if self.use_image_features else 2)
+        shape = 6 + (2 * self.feature_size + 2 if self.use_image_features else 2)
         block_input = tf.keras.Input(shape=shape, name=f'block_{block_id}_input')
         x = tf.keras.layers.BatchNormalization(axis=1, name=f'block_{block_id}_batch_norm_0_layer')(block_input)
         for i in range(self.num_layers_block):
@@ -223,10 +219,10 @@ class LearningNMS(tf.keras.Model, ABC):
 
     def _cal_update_performance_stats(self, boxes, rpn_boxes, nms_output):
         tp, tn, fp, fn = lnms_metrics(boxes, rpn_boxes, nms_output)
-        self.standard[3].update_state(tp)
-        self.standard[4].update_state(fp)
-        self.standard[5].update_state(tn)
-        self.standard[6].update_state(fn)
+        self.standard[3].update_state(tp/tf.shape(rpn_boxes)[0])
+        self.standard[4].update_state(fp/tf.shape(rpn_boxes)[0])
+        self.standard[5].update_state(tn/tf.shape(rpn_boxes)[0])
+        self.standard[6].update_state(fn/tf.shape(rpn_boxes)[0])
 
     def train_step(self, data):
         norm, boxes, sample_weight = extract_data(data)
