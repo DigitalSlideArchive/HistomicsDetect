@@ -7,8 +7,7 @@ from histomics_detect.boxes.neighborhood import assemble_single_neighborhood, al
 
 class BlockModel(tf.keras.Model, ABC):
     def _init_(self, blocks: List[Tuple[tf.keras.Model, tf.keras.Model]], final_layers: tf.keras.Model,
-               threshold: float = 0.5, train_tile: float = 224,
-               use_image_features: bool = True):
+               threshold: float = 0.5, train_tile: float = 224, use_image_features: bool = True):
         """
         Learning-NMS block model
 
