@@ -7,7 +7,7 @@ from histomics_detect.boxes.neighborhood import assemble_single_neighborhood, al
 
 class BlockModel(tf.keras.Model, ABC):
     def _init_(self, blocks: List[Tuple[tf.keras.Model, tf.keras.Model]], final_layers: tf.keras.Model,
-               threshold: float = 0.5, use_centroids: bool = False, train_tile: float = 224,
+               threshold: float = 0.5, train_tile: float = 224,
                use_image_features: bool = True):
         """
         Learning-NMS block model
@@ -22,8 +22,6 @@ class BlockModel(tf.keras.Model, ABC):
             layers that compress the final prediction representations into the final output score
         threshold: float
             threshold for two predictions to belong in the same neighbohood
-        use_centroids: bool
-            true if centroids instead of boxes are used
         train_tile: float
             size of the image tile used for training
         use_image_features: bool
@@ -36,8 +34,6 @@ class BlockModel(tf.keras.Model, ABC):
         self.threshold = threshold
         self.train_tile = train_tile
         self.use_image_features = use_image_features
-
-        self.use_centroids = use_centroids
 
     def call(self, x: Tuple[tf.Tensor, tf.Tensor], training: bool = False, mask=None):
         """
