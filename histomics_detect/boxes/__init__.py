@@ -9,6 +9,7 @@ from .transforms import parameterize
 from .transforms import unparameterize
 from .transforms import filter_edge_boxes
 from .neighborhood import assemble_single_neighborhood, all_neighborhoods_additional_info
+from .match import cluster_assignment
 
 # list out things that are available for public use
 __all__ = (
@@ -20,5 +21,6 @@ __all__ = (
     'unparameterize',
     'filter_edge_boxes',
     'assemble_single_neighborhood',
-    'all_neighborhoods_additional_info'
+    'all_neighborhoods_additional_info',
+    'cluster_assignment'
 )

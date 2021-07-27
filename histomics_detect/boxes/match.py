@@ -3,7 +3,7 @@ import tensorflow as tf
 from histomics_detect.metrics import iou
 
 
-def cluster_assignment(boxes: tf.Tensor, rpn_positive: tf.Tensor, use_centroids: bool = False) -> tf.Tensor:
+def cluster_assignment(boxes: tf.Tensor, rpn_positive: tf.Tensor) -> tf.Tensor:
     """
     calculates the cluster assignment of the predictions to the ground truth boxes
     a cluster is a group of predictions all of which are closest to the same ground truth box
@@ -25,12 +25,10 @@ def cluster_assignment(boxes: tf.Tensor, rpn_positive: tf.Tensor, use_centroids:
     rpn_positive: tensor (float32)
         predictions
         shape: N x 4
-    use_centroids: bool
-        are the the boxes only centroids
 
     Returns
     -------
-    cluster_assignment: tensor (int32)
+    clusters: tensor (int32)
         a list with one element per prediction (rpn_positive)
         that element is the index of the closest ground truth box
 
@@ -41,5 +39,5 @@ def cluster_assignment(boxes: tf.Tensor, rpn_positive: tf.Tensor, use_centroids:
         assignment = tf.argmax(ious[i])
         return assignment
 
-    cluster_assignment = tf.vectorized_map(assign_single_prediction, tf.range(0, tf.shape(rpn_positive)[0]))
-    return cluster_assignment
+    clusters = tf.vectorized_map(assign_single_prediction, tf.range(0, tf.shape(rpn_positive)[0]))
+    return tf.cast(clusters, tf.int32)
