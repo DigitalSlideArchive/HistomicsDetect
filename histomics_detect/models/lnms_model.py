@@ -217,6 +217,9 @@ class LearningNMS(tf.keras.Model, ABC):
 
         self._cal_update_performance_stats(boxes, rpn_boxes, nms_output)
 
+        metrics = {m.name: m.result() for m in self.standard}
+        return metrics
+
     def _cal_update_performance_stats(self, boxes, rpn_boxes, nms_output):
         tp, tn, fp, fn = lnms_metrics(boxes, rpn_boxes, nms_output)
         self.standard[3].update_state(tp/tf.shape(rpn_boxes)[0])
