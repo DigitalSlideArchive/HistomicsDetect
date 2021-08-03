@@ -69,31 +69,20 @@ class BlockModel(tf.keras.Model, ABC):
         num_predictions = tf.shape(rpn_boxes_positive)[0]
         prediction_ids = tf.range(0, num_predictions) #TODO figure out why error here with lymphoma
 
-        neighborhood_sizes, neighborhoods_add_info, neighborhoods_indeces = all_neighborhoods_additional_info(
-            rpn_boxes_positive, prediction_ids, self.train_tile, self.threshold)
+        neighborhood_sizes, neighborhoods_add_info, neighborhoods_indexes, self_indexes = \
+            all_neighborhoods_additional_info(rpn_boxes_positive, prediction_ids, self.train_tile, self.threshold)
 
         for block, output in self.blocks:
             # run network on block
-            neighborhoods = assemble_single_neighborhood(prediction_ids[0], interpolated,
-                                                         neighborhoods_indeces[0:neighborhood_sizes[0]],
-                                                         neighborhoods_add_info[0:neighborhood_sizes[0]],
-                                                         self.use_image_features)
-            start_index = neighborhood_sizes[0]
-            counter = 1
 
-            # assemble neighborhoods
-            for x in prediction_ids[1:]:
-                tf.autograph.experimental.set_loop_options(
-                    shape_invariants=[(neighborhoods, tf.TensorShape([None, None]))])
-                end_index = start_index + neighborhood_sizes[counter]
-                new_neighborhood = assemble_single_neighborhood(x, interpolated,
-                                                                neighborhoods_indeces[start_index:end_index],
-                                                                neighborhoods_add_info[start_index:end_index],
-                                                                self.use_image_features)
-
-                start_index = end_index
-                counter += 1
-                neighborhoods = tf.concat([neighborhoods, new_neighborhood], axis=0)
+            # assemble neighborhood
+            if self.use_image_features:
+                neighborhood = tf.reshape(tf.gather(interpolated, neighborhoods_indexes),
+                                          [-1, tf.shape(interpolated)[1]])
+                main_predictions = tf.reshape(tf.gather(interpolated, self_indexes), [-1, tf.shape(interpolated)[1]])
+                neighborhoods = tf.concat([neighborhood, main_predictions, neighborhoods_add_info], axis=1)
+            else:
+                neighborhoods = neighborhoods_add_info
             num_predictions = tf.size(neighborhood_sizes)
 
             # run block
