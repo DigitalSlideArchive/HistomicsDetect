@@ -216,6 +216,9 @@ def _pos_neg_loss_calculation(nms_output: tf.Tensor, labels: tf.Tensor, loss_obj
     positive_labels = tf.ones(tf.shape(positive_predictions))
     negative_labels = tf.zeros(tf.shape(negative_predictions))
 
+    # TODO handle edge case where no positive or no negative predictions
+
+
     # calculate loss
     pos_loss = tf.reduce_sum(loss_object(positive_predictions, positive_labels))
     neg_loss = tf.reduce_sum(loss_object(negative_predictions, negative_labels))
@@ -272,6 +275,7 @@ def clustering_loss(nms_output: tf.Tensor, cluster_assignment: tf.Tensor, loss_o
     indexes: tensor (float32)
         indexes of the values that correspond to positive anchors
     """
+    cluster_assignment = tf.expand_dims(cluster_assignment, axis=1)
 
     # find prediction index with highest objectiveness in cluster
     def func(i) -> tf.int32:
@@ -284,7 +288,6 @@ def clustering_loss(nms_output: tf.Tensor, cluster_assignment: tf.Tensor, loss_o
 
     indeces = tf.map_fn(lambda x: func(x), tf.range(0, tf.reduce_max(cluster_assignment) + 1))
 
-    indeces = tf.expand_dims(indeces, axis=1)
     labels = tf.scatter_nd(indeces, tf.ones(tf.shape(indeces)), tf.shape(nms_output))
 
     # calculate pos and neg loss

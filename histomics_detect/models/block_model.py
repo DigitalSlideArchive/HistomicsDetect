@@ -67,7 +67,7 @@ class BlockModel(tf.keras.Model, ABC):
 
         # initialize loop paramters
         num_predictions = tf.shape(rpn_boxes_positive)[0]
-        prediction_ids = tf.range(0, num_predictions)
+        prediction_ids = tf.range(0, num_predictions) #TODO figure out why error here with lymphoma
 
         neighborhood_sizes, neighborhoods_add_info, neighborhoods_indeces = all_neighborhoods_additional_info(
             rpn_boxes_positive, prediction_ids, self.train_tile, self.threshold)
