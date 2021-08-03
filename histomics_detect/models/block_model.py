@@ -77,8 +77,10 @@ class BlockModel(tf.keras.Model, ABC):
 
             # assemble neighborhood
             if self.use_image_features:
+                # assemble the neighboring prediction representation for each neighborhood
                 neighborhood = tf.reshape(tf.gather(interpolated, neighborhoods_indexes),
                                           [-1, tf.shape(interpolated)[1]])
+                # assemble the tiled prediction representation of the main prediction of each neighborhood
                 main_predictions = tf.reshape(tf.gather(interpolated, self_indexes), [-1, tf.shape(interpolated)[1]])
                 neighborhoods = tf.concat([neighborhood, main_predictions, neighborhoods_add_info], axis=1)
             else:
@@ -94,6 +96,7 @@ class BlockModel(tf.keras.Model, ABC):
             counter = tf.constant(0, dtype=tf.int32)
             start_index = tf.constant(0)
 
+            # pool each neighborhood to one prediction representation
             for size in neighborhood_sizes:
                 neighborhood_slice = processed_neighborhoods[start_index:start_index + size]
                 pooled_predictions = pooled_predictions.write(counter, tf.math.reduce_max(neighborhood_slice, axis=0))
