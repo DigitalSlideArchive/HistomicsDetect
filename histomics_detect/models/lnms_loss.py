@@ -143,7 +143,7 @@ def paper_loss(boxes: tf.Tensor, rpn_boxes_positive: tf.Tensor, nms_output: tf.T
     """
     ious, _ = iou(boxes, rpn_boxes_positive)
 
-    # function that finds prediction with highest overlap to ground truth
+    # function that finds prediction with highest overlap with ground truth
     def func(i) -> tf.int32:
         index = tf.cast(i, tf.int32)
         assignment = tf.cast(tf.argmax(ious[index]), tf.int32)

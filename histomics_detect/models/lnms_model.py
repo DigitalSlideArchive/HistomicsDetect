@@ -231,7 +231,14 @@ class LearningNMS(tf.keras.Model, ABC):
     def train_step(self, data):
         norm, boxes, sample_weight = extract_data(data)
 
-        loss = self._train_function(norm, boxes, sample_weight)
+        # extract features and rpn boxes from image
+        features, rpn_boxes, scores = self.extract_boxes_n_scores(norm)
+
+        if self.distributed_training:
+            self._train_function(features, boxes, rpn_boxes, scores)
+        else:
+            loss = tf.cond(tf.shape(rpn_boxes)[0] > 0, lambda: self._train_function(features, boxes, rpn_boxes, scores),
+                           lambda: 0.0)
 
         # save loss and metrics
         losses = {'lnms_loss': loss}
@@ -239,10 +246,7 @@ class LearningNMS(tf.keras.Model, ABC):
 
         return {**losses, **metrics}
 
-    def _train_function(self, norm, boxes, sample_weight):
-
-        # extract features and rpn boxes from image
-        features, rpn_boxes, scores = self.extract_boxes_n_scores(norm)
+    def _train_function(self, features, boxes, rpn_boxes, scores):
 
         if not self.compressed_gradient:
             compressed_features = self.compression_net(features, training=False)

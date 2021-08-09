@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from histomics_detect.boxes import filter_edge_boxes
 
 
-def create_anchors(anchor_px, field, width, height):
+def create_anchors(anchor_px, field, width, height, filter_boxes=True):
     """Generates anchors given anchor sizes, receptive field size, and input image size.
     
     This function generates the complete set of anchors for an image with dimensions 
@@ -27,6 +27,8 @@ def create_anchors(anchor_px, field, width, height):
         Input image width in pixels.
     height: int32
         Input image height in pixels.
+    filter_boxes: bool
+        if true boxes are filtered, if they overlap with the border
         
     Returns
     -------
@@ -59,7 +61,8 @@ def create_anchors(anchor_px, field, width, height):
     anchors = tf.reshape(anchors * multiplier, (-1, 4))
 
     # remove anchors that cross the boundary
-    anchors = filter_edge_boxes(anchors, width, height, 0)
+    if filter_boxes:
+        anchors = filter_edge_boxes(anchors, width, height, 0)
 
     return anchors
 
