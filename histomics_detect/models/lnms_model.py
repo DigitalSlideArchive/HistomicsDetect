@@ -1,4 +1,5 @@
 from abc import ABC
+from typing import Tuple
 import tensorflow as tf
 
 from histomics_detect.networks.field_size import field_size
@@ -216,10 +217,14 @@ class LearningNMS(tf.keras.Model, ABC):
         # run network
         nms_output = self.net((interpolated, rpn_boxes), training=True)
 
+        loss, _ = self._calculate_loss(nms_output, boxes, rpn_boxes)
+
         self._cal_update_performance_stats(boxes, rpn_boxes, nms_output)
 
         metrics = {m.name: m.result() for m in self.standard}
-        return metrics
+        losses = {'val_loss': loss}
+
+        return {**losses, **metrics}
 
     def _cal_update_performance_stats(self, boxes, rpn_boxes, nms_output):
         tp, tn, fp, fn = lnms_metrics(boxes, rpn_boxes, nms_output)
@@ -268,28 +273,7 @@ class LearningNMS(tf.keras.Model, ABC):
             # run network
             nms_output = self.net((interpolated, rpn_boxes), training=True)
 
-            # calculate loss
-            if self.loss_type == 'dummy':
-                loss = tf.reduce_sum(self.loss_object(nms_output, tf.ones(tf.shape(nms_output))))
-            elif self.loss_type == 'xor':
-                clusters = cluster_assignment(boxes, rpn_boxes)
-                loss, labels = xor_loss(nms_output, clusters)
-                # loss, labels = self._cal_xor_loss(nms_output, cluster_assignment)
-            elif self.loss_type == 'clustering':
-                clusters = cluster_assignment(boxes, rpn_boxes)
-                loss, labels = clustering_loss(nms_output, clusters, self.loss_object, self.positive_weight,
-                                               self.standard, self.weighted_loss, self.neg_pos_loss)
-            elif self.loss_type == 'paper':
-                loss, labels = paper_loss(boxes, rpn_boxes, nms_output, self.loss_object, self.positive_weight,
-                                          self.standard, self.weighted_loss, self.neg_pos_loss)
-            elif self.loss_type == 'clustering_normal':
-                clusters = cluster_assignment(boxes, rpn_boxes)
-                loss, labels = normal_clustering_loss(nms_output, boxes, rpn_boxes, clusters, self.loss_object,
-                                                      self.positvie_weight, self.standard, self.weighted_loss,
-                                                      self.neg_pos_loss, self.use_pos_neg_loss, self.norm_loss_weight)
-            else:
-                loss, labels = normal_loss(self.loss_object, boxes, rpn_boxes, nms_output, self.positive_weight,
-                                           self.standard, neg_pos_loss=True)
+            loss, labels = self._calculate_loss(nms_output, boxes, rpn_boxes)
 
         gradients = tape.gradient(loss, self.net.trainable_weights)
         self.optimizer.apply_gradients(zip(gradients, self.net.trainable_weights))
@@ -304,3 +288,30 @@ class LearningNMS(tf.keras.Model, ABC):
             self._cal_update_performance_stats(boxes, rpn_boxes, nms_output)
 
         return loss
+
+    def _calculate_loss(self, nms_output, boxes, rpn_boxes) -> Tuple[float, tf.Tensor]:
+        # calculate loss
+        if self.loss_type == 'dummy':
+            loss = tf.reduce_sum(self.loss_object(nms_output, tf.ones(tf.shape(nms_output))))
+            labels = []
+        elif self.loss_type == 'xor':
+            clusters = cluster_assignment(boxes, rpn_boxes)
+            loss, labels = xor_loss(nms_output, clusters)
+            # loss, labels = self._cal_xor_loss(nms_output, cluster_assignment)
+        elif self.loss_type == 'clustering':
+            clusters = cluster_assignment(boxes, rpn_boxes)
+            loss, labels = clustering_loss(nms_output, clusters, self.loss_object, self.positive_weight,
+                                           self.standard, self.weighted_loss, self.neg_pos_loss)
+        elif self.loss_type == 'paper':
+            loss, labels = paper_loss(boxes, rpn_boxes, nms_output, self.loss_object, self.positive_weight,
+                                      self.standard, self.weighted_loss, self.neg_pos_loss)
+        elif self.loss_type == 'clustering_normal':
+            clusters = cluster_assignment(boxes, rpn_boxes)
+            loss, labels = normal_clustering_loss(nms_output, boxes, rpn_boxes, clusters, self.loss_object,
+                                                  self.positvie_weight, self.standard, self.weighted_loss,
+                                                  self.neg_pos_loss, self.use_pos_neg_loss, self.norm_loss_weight)
+        else:
+            loss, labels = normal_loss(self.loss_object, boxes, rpn_boxes, nms_output, self.positive_weight,
+                                       self.standard, neg_pos_loss=True)
+
+        return loss, labels

@@ -40,10 +40,10 @@ def cluster_assignment(boxes: tf.Tensor, rpn_positive: tf.Tensor, min_threshold:
 
     def assign_single_prediction(i) -> tf.int32:
         assignment = tf.cast(tf.argmax(ious[i]), tf.int32)
-        # assignment = tf.cond(ious[i, assignment] > min_threshold, lambda: assignment,
-        #                      lambda: tf.constant(-1, dtype=tf.int32))
+        assignment = tf.cond(ious[i, assignment] > min_threshold, lambda: assignment,
+                             lambda: tf.constant(-1, dtype=tf.int32))
         return assignment
 
-    clusters = tf.vectorized_map(assign_single_prediction, tf.range(0, tf.shape(rpn_positive)[0]))
+    clusters = tf.map_fn(assign_single_prediction, tf.range(0, tf.shape(rpn_positive)[0]))
     # clusters = tf.cond(tf.reduce_max(clusters) == -1, lambda: clusters + 1, lambda: clusters)
     return tf.cast(clusters, tf.int32)
