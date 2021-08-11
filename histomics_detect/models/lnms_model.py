@@ -7,7 +7,7 @@ from histomics_detect.models.block_model import BlockModel
 from histomics_detect.roialign.roialign import roialign
 from histomics_detect.models.faster_rcnn import map_outputs
 from histomics_detect.boxes.transforms import unparameterize
-from histomics_detect.models.lnms_loss import normal_loss, clustering_loss, paper_loss, xor_loss
+from histomics_detect.models.lnms_loss import normal_loss, clustering_loss, paper_loss, xor_loss, normal_clustering_loss
 from histomics_detect.metrics.lnms import lnms_metrics
 from histomics_detect.models.model_utils import extract_data
 from histomics_detect.boxes.match import cluster_assignment
@@ -282,6 +282,11 @@ class LearningNMS(tf.keras.Model, ABC):
             elif self.loss_type == 'paper':
                 loss, labels = paper_loss(boxes, rpn_boxes, nms_output, self.loss_object, self.positive_weight,
                                           self.standard, self.weighted_loss, self.neg_pos_loss)
+            elif self.loss_type == 'clustering_normal':
+                clusters = cluster_assignment(boxes, rpn_boxes)
+                loss, labels = normal_clustering_loss(nms_output, boxes, rpn_boxes, clusters, self.loss_object,
+                                                      self.positvie_weight, self.standard, self.weighted_loss,
+                                                      self.neg_pos_loss, self.use_pos_neg_loss, self.norm_loss_weight)
             else:
                 loss, labels = normal_loss(self.loss_object, boxes, rpn_boxes, nms_output, self.positive_weight,
                                            self.standard, neg_pos_loss=True)
