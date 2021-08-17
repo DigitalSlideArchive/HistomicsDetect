@@ -1,7 +1,10 @@
 import tensorflow as tf
 
 
-def cross_from_boxes(boxes: tf.Tensor, scale: float, width: int = 20, height: int = 20, image_width: int = 224,
+from histomics_detect.augmentation.augmentation import _box_crop
+
+
+def cross_from_boxes(boxes: tf.Tensor, scale: float, width: int = 10, height: int = 10, image_width: int = 224,
                      image_height: int = 224, grow: bool = False) -> tf.Tensor:
     """
     generates cross shape for each box (similar to CornerNet)
@@ -43,17 +46,24 @@ def cross_from_boxes(boxes: tf.Tensor, scale: float, width: int = 20, height: in
         vertical and horizontal boxes of each cross for each box
         shape: (N, 2, 4)
     """
+    image_width = tf.cast(image_width, tf.float32)
+    image_height = tf.cast(image_height, tf.float32)
+
     centers = boxes[:, :2] + boxes[:, 2:]/2
 
     horizontal_width = scale*boxes[:, 2]
     h_x, h_y, h_w, h_h = centers[:, 0]-horizontal_width, centers[:, 1]-height/2, horizontal_width*2, \
-                         tf.ones(tf.shape(centers)[0])*height
+                         tf.ones(tf.shape(centers)[0], tf.float32)*height
+    h_x, h_w = _box_crop(h_x, h_w, image_width)
+    h_y, h_h = _box_crop(h_y, h_h, image_height)
 
     horizontal_boxes = tf.stack([h_x, h_y, h_w, h_h], axis=1)
 
     vertical_width = scale*boxes[:, 3]
     v_x, v_y, v_w, v_h = centers[:, 0]-width/2, centers[:, 1]-vertical_width, tf.ones(tf.shape(centers)[0])*width, \
                          vertical_width*2
+    v_x, v_w = _box_crop(v_x, v_w, image_width)
+    v_y, v_h = _box_crop(v_y, v_h, image_height)
 
     vertical_boxes = tf.stack([v_x, v_y, v_w, v_h], axis=1)
 

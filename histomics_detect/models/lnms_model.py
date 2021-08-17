@@ -12,6 +12,7 @@ from histomics_detect.models.lnms_loss import normal_loss, clustering_loss, pape
 from histomics_detect.metrics.lnms import lnms_metrics
 from histomics_detect.models.model_utils import extract_data
 from histomics_detect.boxes.match import cluster_assignment
+from histomics_detect.boxes.cross_boxes import cross_from_boxes
 
 
 class LearningNMS(tf.keras.Model, ABC):
@@ -76,7 +77,10 @@ class LearningNMS(tf.keras.Model, ABC):
         final_output: tf.keras.Model
             network for compressing neighborhood to single prediction vector
         """
-        final_input = tf.keras.Input(shape=self.feature_size + 1, name="final_after_block_layers_input")
+        feature_size_multiplier = 2 if self.combine_box_and_cross else 1
+
+        final_input = tf.keras.Input(shape=self.feature_size * feature_size_multiplier + 1,
+                                     name="final_after_block_layers_input")
         x = final_input
         for i in range(self.num_hidden_layers):
             x = tf.keras.layers.Dense(self.final_hidden_layer_features, activation=self.activation, use_bias=True,
@@ -115,8 +119,9 @@ class LearningNMS(tf.keras.Model, ABC):
         block, output: tf.keras.Model, tf.keras.Model
             block keras model, output keras model
         """
+        feature_size_multiplier = 2 if self.combine_box_and_cross else 1
 
-        shape = 6 + (2 * self.feature_size + 2 if self.use_image_features else 2)
+        shape = 6 + (feature_size_multiplier * 2 * self.feature_size + 2 if self.use_image_features else 2)
         block_input = tf.keras.Input(shape=shape, name=f'block_{block_id}_input')
         x = tf.keras.layers.BatchNormalization(axis=1, name=f'block_{block_id}_batch_norm_0_layer')(block_input)
         for i in range(self.num_layers_block):
@@ -127,7 +132,8 @@ class LearningNMS(tf.keras.Model, ABC):
 
         final_input = tf.keras.Input(shape=self.block_hidden_layer_features, name=f'block_{block_id}_after_pool_input')
         output = tf.keras.Model(inputs=final_input,
-                                outputs=tf.keras.layers.Dense(self.feature_size + 1, activation='linear',
+                                outputs=tf.keras.layers.Dense(self.feature_size*feature_size_multiplier + 1,
+                                                              activation='linear',
                                                               name=f'block_{block_id}_after_pool_layer', use_bias=True)(
                                     final_input),
                                 name=f'block_{block_id}_output')
@@ -153,10 +159,27 @@ class LearningNMS(tf.keras.Model, ABC):
             interpolated feature for each box
         """
         # calculate interpolated features
-        interpolated = roialign(features, rpn_boxes, self.field,
-                                pool=self.roialign_pool, tiles=self.roialign_tiles)
-        interpolated = tf.reduce_mean(interpolated, axis=1)
-        interpolated = tf.reduce_mean(interpolated, axis=1)
+        if self.cross_boxes:
+            cross_boxes = cross_from_boxes(rpn_boxes, self.cross_scale, image_width=self.width, image_height=self.height)
+            interpolated = roialign(features, tf.reshape(cross_boxes, (-1, 4)), self.field,
+                                    pool=self.roialign_pool, tiles=self.roialign_tiles)
+            interpolated = tf.reduce_mean(interpolated, axis=1)
+            interpolated = tf.reduce_mean(interpolated, axis=1)
+            interpolated = tf.reshape(interpolated, (tf.shape(rpn_boxes)[0], 2, -1))
+            interpolated = tf.reduce_mean(interpolated, axis=1)
+
+            if self.combine_box_and_cross:
+                interpolated_box = roialign(features, rpn_boxes, self.field,
+                                            pool=self.roialign_pool, tiles=self.roialign_tiles)
+                interpolated_box = tf.reduce_mean(interpolated_box, axis=1)
+                interpolated_box = tf.reduce_mean(interpolated_box, axis=1)
+                interpolated = tf.concat([interpolated, interpolated_box], axis=1)
+            # TODO maybe concatenate instead of mean for cross
+        else:
+            interpolated = roialign(features, rpn_boxes, self.field,
+                                    pool=self.roialign_pool, tiles=self.roialign_tiles)
+            interpolated = tf.reduce_mean(interpolated, axis=1)
+            interpolated = tf.reduce_mean(interpolated, axis=1)
 
         interpolated = tf.reshape(interpolated, [tf.shape(interpolated)[0], -1])
 
