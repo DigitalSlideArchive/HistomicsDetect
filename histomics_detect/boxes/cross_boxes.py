@@ -1,0 +1,61 @@
+import tensorflow as tf
+
+
+def cross_from_boxes(boxes: tf.Tensor, scale: float, width: int = 20, height: int = 20, image_width: int = 224,
+                     image_height: int = 224, grow: bool = False) -> tf.Tensor:
+    """
+    generates cross shape for each box (similar to CornerNet)
+
+    takes the center (c_x, c_y) of the boxes (x, y, w, h) and creates two boxes from that:
+    - width box (vertical line of the cross):
+        spans from (c_x-'width'/2, c_y-'factor'*h) to (c_x+'width'/2, c_y+'factor'*h)
+    - height box (horizontal line of the cross):
+        spans from (c_x-'factor'*w, c_y-'height'/2) to (c_x+'factor'*w, c_y+'height'/2)
+
+    the cross is capped such that it is entirely within the image boundaries
+
+    N: number of boxes
+
+    Parameters
+    ----------
+    boxes: tensor (int32)
+        input boxes to be turned into crosses
+        shape (N, 4)
+    scale: float
+        see above
+
+        scale * box_width, scale * box_height is the width and height of the cross
+    width: int
+        width of the vertical line
+    height: int
+        height of the horizontal line
+    image_width: int
+        width of the image
+    image_height: int
+        height of the image
+    grow: bool
+        make cross always span the whole image
+        # TODO implement fully
+
+    Returns
+    -------
+    cross_boxes: tensor (float32)
+        vertical and horizontal boxes of each cross for each box
+        shape: (N, 2, 4)
+    """
+    centers = boxes[:, :2] + boxes[:, 2:]/2
+
+    horizontal_width = scale*boxes[:, 2]
+    h_x, h_y, h_w, h_h = centers[:, 0]-horizontal_width, centers[:, 1]-height/2, horizontal_width*2, height
+
+    horizontal_boxes = tf.stack([h_x, h_y, h_w, h_h], axis=1)
+
+    vertical_width = scale*boxes[:, 3]
+    v_x, v_y, v_w, v_h = centers[:, 0]-width/2, centers[:, 1]-vertical_width, width, vertical_width*2
+
+    vertical_boxes = tf.stack([v_x, v_y, v_w, v_h], axis=1)
+
+    horizontal_boxes = tf.expand_dims(horizontal_boxes, axis=1)
+    vertical_boxes = tf.expand_dims(vertical_boxes, axis=1)
+
+    return tf.concat([horizontal_boxes, vertical_boxes], axis=1)

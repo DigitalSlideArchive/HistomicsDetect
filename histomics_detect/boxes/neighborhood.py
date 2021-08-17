@@ -6,7 +6,8 @@ from histomics_detect.metrics import iou
 
 
 def assemble_single_neighborhood(anchor_id: int, interpolated: tf.Tensor, neighborhood_indeces: tf.Tensor,
-                                 neighborhood_additional_info: tf.Tensor, use_image_features: bool = True) \
+                                 neighborhood_additional_info: tf.Tensor, use_image_features: bool = True,
+                                 use_joint_features: bool = False, use_cross_feature: bool = False) \
         -> tf.float32:
     """
     assembles the prediction representations for a neighborhood of a single prediction
@@ -37,6 +38,11 @@ def assemble_single_neighborhood(anchor_id: int, interpolated: tf.Tensor, neighb
     
     Parameters
     ----------
+    use_joint_features: bool
+        creates a bounding box spanning the neighboring boxes and interpolates the features for that
+    use_cross_feature: bool
+        creates a cross shape out of two intersecting bounding boxes spanning from the center until specified end or
+        image boundary
     anchor_id: int
         id of current prediction in [0, N-1]
     interpolated: tensor (float32)
@@ -57,6 +63,7 @@ def assemble_single_neighborhood(anchor_id: int, interpolated: tf.Tensor, neighb
 
     # collect image features
     if use_image_features:
+        # TODO implement joint feature, and cross feature
         neighborhood = tf.reshape(tf.gather(interpolated, neighborhood_indeces),
                                   [tf.size(neighborhood_indeces), tf.shape(interpolated)[1]])
         tiled_pred = tf.tile(tf.expand_dims(interpolated[anchor_id], axis=0), (tf.shape(neighborhood)[0], 1))

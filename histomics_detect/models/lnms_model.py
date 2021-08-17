@@ -81,7 +81,9 @@ class LearningNMS(tf.keras.Model, ABC):
         for i in range(self.num_hidden_layers):
             x = tf.keras.layers.Dense(self.final_hidden_layer_features, activation=self.activation, use_bias=True,
                                       name=f'final_after_block_layer_{i}')(x)
-        x = tf.keras.layers.Dense(1, activation=self.final_activation, name="output_score_layer", use_bias=True)(x)
+        output_size = self.add_regression_param * 2+1
+        x = tf.keras.layers.Dense(output_size, activation=self.final_activation, name="output_score_layer",
+                                  use_bias=True)(x)
 
         return tf.keras.Model(inputs=final_input, outputs=x)
 
@@ -227,7 +229,8 @@ class LearningNMS(tf.keras.Model, ABC):
         return {**losses, **metrics}
 
     def _cal_update_performance_stats(self, boxes, rpn_boxes, nms_output):
-        tp, tn, fp, fn = lnms_metrics(boxes, rpn_boxes, nms_output)
+        scores = tf.expand_dims(nms_output[:, 0], axis=1)
+        tp, tn, fp, fn = lnms_metrics(boxes, rpn_boxes, scores)
         self.standard[3].update_state(tp/tf.shape(rpn_boxes)[0])
         self.standard[4].update_state(fp/tf.shape(rpn_boxes)[0])
         self.standard[5].update_state(tn/tf.shape(rpn_boxes)[0])
@@ -290,28 +293,59 @@ class LearningNMS(tf.keras.Model, ABC):
         return loss
 
     def _calculate_loss(self, nms_output, boxes, rpn_boxes) -> Tuple[float, tf.Tensor]:
+        """
+        call the loss function of the loss specified in 'loss_type'
+
+        S: size of neighborhood
+        N: number of predictions
+        D: size of a single prediction
+        G: number of ground truth boxes
+
+        Parameters
+        ----------
+        nms_output: tensor (float32)
+            objectiveness scores corresponding to the predicted boxes after lnms processing
+            shape: N x 1
+        boxes tensor (float32)
+            ground truth boxes
+            shape: G x 4
+        rpn_boxes: tensor (float32)
+            shape: N x 4
+            each prediction in box form
+
+        Returns
+        -------
+        loss
+        labels
+        """
         # calculate loss
         if self.loss_type == 'dummy':
-            loss = tf.reduce_sum(self.loss_object(nms_output, tf.ones(tf.shape(nms_output))))
+            scores = tf.expand_dims(nms_output[:, 0], axis=0)
+            loss = tf.reduce_sum(self.loss_object(scores, tf.ones(tf.shape(nms_output))))
             labels = []
         elif self.loss_type == 'xor':
+            scores = tf.expand_dims(nms_output[:, 0], axis=0)
             clusters = cluster_assignment(boxes, rpn_boxes)
-            loss, labels = xor_loss(nms_output, clusters)
+            loss, labels = xor_loss(scores, clusters)
             # loss, labels = self._cal_xor_loss(nms_output, cluster_assignment)
         elif self.loss_type == 'clustering':
             clusters = cluster_assignment(boxes, rpn_boxes)
             loss, labels = clustering_loss(nms_output, clusters, self.loss_object, self.positive_weight,
-                                           self.standard, self.weighted_loss, self.neg_pos_loss)
+                                           self.standard, self.weighted_loss, boxes, rpn_boxes, self.neg_pos_loss,
+                                           self.add_regression_param)
         elif self.loss_type == 'paper':
-            loss, labels = paper_loss(boxes, rpn_boxes, nms_output, self.loss_object, self.positive_weight,
+            scores = tf.expand_dims(nms_output[:, 0], axis=0)
+            loss, labels = paper_loss(boxes, rpn_boxes, scores, self.loss_object, self.positive_weight,
                                       self.standard, self.weighted_loss, self.neg_pos_loss)
         elif self.loss_type == 'clustering_normal':
             clusters = cluster_assignment(boxes, rpn_boxes)
             loss, labels = normal_clustering_loss(nms_output, boxes, rpn_boxes, clusters, self.loss_object,
-                                                  self.positvie_weight, self.standard, self.weighted_loss,
-                                                  self.neg_pos_loss, self.use_pos_neg_loss, self.norm_loss_weight)
+                                                  self.positive_weight, self.standard, self.weighted_loss,
+                                                  self.neg_pos_loss, self.use_pos_neg_loss, self.norm_loss_weight,
+                                                  self.add_regression_param)
         else:
-            loss, labels = normal_loss(self.loss_object, boxes, rpn_boxes, nms_output, self.positive_weight,
+            scores = tf.expand_dims(nms_output[:, 0], axis=0)
+            loss, labels = normal_loss(self.loss_object, boxes, rpn_boxes, scores, self.positive_weight,
                                        self.standard, neg_pos_loss=True)
 
         return loss, labels
