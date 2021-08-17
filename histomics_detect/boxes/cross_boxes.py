@@ -46,12 +46,14 @@ def cross_from_boxes(boxes: tf.Tensor, scale: float, width: int = 20, height: in
     centers = boxes[:, :2] + boxes[:, 2:]/2
 
     horizontal_width = scale*boxes[:, 2]
-    h_x, h_y, h_w, h_h = centers[:, 0]-horizontal_width, centers[:, 1]-height/2, horizontal_width*2, height
+    h_x, h_y, h_w, h_h = centers[:, 0]-horizontal_width, centers[:, 1]-height/2, horizontal_width*2, \
+                         tf.ones(tf.shape(centers)[0])*height
 
     horizontal_boxes = tf.stack([h_x, h_y, h_w, h_h], axis=1)
 
     vertical_width = scale*boxes[:, 3]
-    v_x, v_y, v_w, v_h = centers[:, 0]-width/2, centers[:, 1]-vertical_width, width, vertical_width*2
+    v_x, v_y, v_w, v_h = centers[:, 0]-width/2, centers[:, 1]-vertical_width, tf.ones(tf.shape(centers)[0])*width, \
+                         vertical_width*2
 
     vertical_boxes = tf.stack([v_x, v_y, v_w, v_h], axis=1)
 
