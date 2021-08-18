@@ -354,7 +354,7 @@ class LearningNMS(tf.keras.Model, ABC):
         elif self.loss_type == 'clustering':
             clusters = cluster_assignment(boxes, rpn_boxes)
             loss, labels = clustering_loss(nms_output, clusters, self.loss_object, self.positive_weight,
-                                           self.standard, self.weighted_loss, boxes, rpn_boxes, self.neg_pos_loss,
+                                           self.standard, boxes, rpn_boxes, self.weighted_loss, self.neg_pos_loss,
                                            self.add_regression_param)
         elif self.loss_type == 'paper':
             scores = tf.expand_dims(nms_output[:, 0], axis=0)
