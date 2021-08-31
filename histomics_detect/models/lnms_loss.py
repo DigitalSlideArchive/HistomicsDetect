@@ -185,6 +185,8 @@ def calculate_labels(boxes, rpn_boxes_positive, output_shape):
     indexes: tensor (int32)
         indexes of the predictions that are positive
     """
+    #TODO does double assignment either remove that
+
     ious, _ = iou(boxes, rpn_boxes_positive)
 
     # function that finds prediction with highest overlap with ground truth
@@ -256,6 +258,47 @@ def _pos_neg_loss_calculation(nms_output: tf.Tensor, labels: tf.Tensor, loss_obj
     return (pos_loss, neg_loss), (positive_labels, negative_labels)
 
 
+def cluster_labels_indexes(scores, cluster_assignment) -> Tuple[tf.Tensor, tf.Tensor]:
+    """
+    calculate the labels for the predictions based on clusters and scores
+
+    the 'cluster_assignment' relates predictions to a cluster for each ground truth
+    for each cluster the prediction with the highest score is assigned a positive label (label = 1)
+    the rest is assigned a negative label (label = 0)
+
+    N: number of predictions
+
+    Parameters
+    ----------
+    scores: tensor (float32)
+        objectiveness scores corresponding to the predicted boxes after lnms processing
+        shape: N x 1
+    cluster_assignment: tensor (int32)
+        cluster labels for each prediction
+        shape: N x 1
+
+    Returns
+    -------
+
+    """
+    cluster_assignment = tf.expand_dims(cluster_assignment, axis=1)
+
+    # find prediction index with highest objectiveness in cluster
+    def max_cluster_index_func(i) -> tf.int32:
+        index = tf.cast(i, tf.int32)
+        max_index = tf.argmax(
+            tf.multiply(tf.cast(scores, tf.float32),
+                        tf.cast(tf.equal(cluster_assignment, tf.cast(index, tf.int32)),
+                                tf.float32)))
+        return tf.cast(max_index, tf.int32)
+
+    indexes = tf.map_fn(lambda x: max_cluster_index_func(x), tf.range(0, tf.reduce_max(cluster_assignment) + 1))
+
+    labels = tf.scatter_nd(indexes, tf.ones(tf.shape(indexes)), tf.shape(scores))
+
+    return labels, indexes
+
+
 def clustering_loss(nms_output: tf.Tensor, cluster_assignment: tf.Tensor, loss_object: tf.keras.losses.Loss,
                     positive_weight: float, standard: List[tf.keras.metrics.Metric], boxes: tf.Tensor,
                     rpn_positive: tf.Tensor, weighted_loss: bool = False, neg_pos_loss: bool = False,
@@ -313,20 +356,7 @@ def clustering_loss(nms_output: tf.Tensor, cluster_assignment: tf.Tensor, loss_o
     """
     scores = tf.expand_dims(nms_output[:, 0], axis=1)
 
-    cluster_assignment = tf.expand_dims(cluster_assignment, axis=1)
-
-    # find prediction index with highest objectiveness in cluster
-    def max_cluster_index_func(i) -> tf.int32:
-        index = tf.cast(i, tf.int32)
-        max_index = tf.argmax(
-            tf.multiply(tf.cast(scores, tf.float32),
-                        tf.cast(tf.equal(cluster_assignment, tf.cast(index, tf.int32)),
-                                tf.float32)))
-        return tf.cast(max_index, tf.int32)
-
-    indeces = tf.map_fn(lambda x: max_cluster_index_func(x), tf.range(0, tf.reduce_max(cluster_assignment) + 1))
-
-    labels = tf.scatter_nd(indeces, tf.ones(tf.shape(indeces)), tf.shape(scores))
+    labels, indeces = cluster_labels_indexes(scores, cluster_assignment)
 
     # calculate pos and neg loss
     if neg_pos_loss:
