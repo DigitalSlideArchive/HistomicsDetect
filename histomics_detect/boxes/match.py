@@ -3,7 +3,8 @@ import tensorflow as tf
 from histomics_detect.metrics import iou
 
 
-def cluster_assignment(boxes: tf.Tensor, rpn_positive: tf.Tensor, min_threshold: float = 0.0) -> tf.Tensor:
+def cluster_assignment(boxes: tf.Tensor, rpn_positive: tf.Tensor, min_threshold: float = 0.0,
+                       apply_threshold: bool = False) -> tf.Tensor:
     """
     calculates the cluster assignment of the predictions to the ground truth boxes
     a cluster is a group of predictions all of which are closest to the same ground truth box
@@ -28,6 +29,8 @@ def cluster_assignment(boxes: tf.Tensor, rpn_positive: tf.Tensor, min_threshold:
     min_threshold: float
         if box has no ground truth with an iou higher than 'min_threshold' this box is considered an outlier
         and is not assigned to a cluster
+    apply_threshold: bool
+        set assignment of boxes with overlap less than threshold to -1
 
     Returns
     -------
@@ -40,10 +43,10 @@ def cluster_assignment(boxes: tf.Tensor, rpn_positive: tf.Tensor, min_threshold:
 
     def assign_single_prediction(i) -> tf.int32:
         assignment = tf.cast(tf.argmax(ious[i]), tf.int32)
-        assignment = tf.cond(ious[i, assignment] > min_threshold, lambda: assignment,
-                             lambda: tf.constant(-1, dtype=tf.int32))
+        if apply_threshold:
+            assignment = tf.cond(ious[i, assignment] > min_threshold, lambda: assignment,
+                                 lambda: tf.constant(-1, dtype=tf.int32))
         return assignment
 
     clusters = tf.map_fn(assign_single_prediction, tf.range(0, tf.shape(rpn_positive)[0]))
-    # clusters = tf.cond(tf.reduce_max(clusters) == -1, lambda: clusters + 1, lambda: clusters)
     return tf.cast(clusters, tf.int32)
