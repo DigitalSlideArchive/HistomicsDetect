@@ -2,9 +2,15 @@ import tensorflow as tf
 
 
 def _generate_block(_id: int, num_layers: int, input_features: int, hidden_features: int,
-                    kernel_size: int = 5, activation: str = 'relu') -> tf.keras.Model:
+                    kernel_size: int = 5, activation: str = 'relu', similar: bool = False) -> tf.keras.Model:
     input_layer = tf.keras.Input(shape=[None, None, input_features], name=f"block_{_id}_input")
-    current_layer = input_layer
+
+    if similar:
+        current_layer = tf.keras.layers.Conv2D(hidden_features, kernel_size, activation=activation, padding='same',
+                                               name=f"block_{_id}_hidden_layer_{i}")(input_layer)
+        kernel_size = 1
+    else:
+        current_layer = input_layer
 
     for i in range(num_layers - 1):
         new_layer = tf.keras.layers.Conv2D(hidden_features, kernel_size, activation=activation, padding='same',
@@ -19,7 +25,7 @@ def _generate_block(_id: int, num_layers: int, input_features: int, hidden_featu
 
 def LNMSCNN(input_features: int, hidden_features: int, num_layers: int = 4, num_blocks: int = 2,
             skip_connection: bool = True, activation: str = 'relu', final_activation: str = 'sigmoid',
-            kernel_size: int = 5) -> tf.keras.Model:
+            kernel_size: int = 5, similar: bool = False) -> tf.keras.Model:
     """
     Similar to the LNMS Model but instead of doing the expensive neighborhood assembly this model uses the anchors
     in their grid shape to approximate the neighborhoods with ordinary cnn filters
@@ -73,13 +79,18 @@ def LNMSCNN(input_features: int, hidden_features: int, num_layers: int = 4, num_
         final output activation
     kernel_size: int
         the size of the kernels
+    similar: bool
+        true if similarity network with no neighborhoods
 
     Returns
     -------
     LNMS_CNN_model: tf.keras.Model
         the model with the aforementioned architecture
     """
-    input_features = input_features + 4 + 1
+    if similar:
+        input_features = 2 * (input_features + 4) + 1
+    else:
+        input_features = input_features + 4 + 1
 
     blocks = [_generate_block(_id, num_layers, input_features, hidden_features, kernel_size, activation)
               for _id in range(num_blocks)]

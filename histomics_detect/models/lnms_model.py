@@ -50,20 +50,22 @@ class LearningNMS(tf.keras.Model, ABC):
         self.field = field_size(self.backbone)
         self.anchors = create_anchors(self.anchor_px, self.field, shape[0], shape[1])
 
-        self.net = BlockModel([self._initialize_block(i) for i in range(self.num_blocks)],
-                              self._initialize_final_output(), threshold=self.threshold,
-                              train_tile=self.train_tile, use_image_features=self.use_image_features)
         self.compression_net = compression_network
 
-        # define metrics
-        loss_col = tf.keras.metrics.Mean(name='loss')
-        loss_pos = tf.keras.metrics.Mean(name='pos_loss')
-        loss_neg = tf.keras.metrics.Mean(name='neg_loss')
-        tp = tf.keras.metrics.Mean(name='tp')
-        fp = tf.keras.metrics.Mean(name='fp')
-        tn = tf.keras.metrics.Mean(name='tn')
-        fn = tf.keras.metrics.Mean(name='fn')
-        self.standard = [loss_col, loss_pos, loss_neg, tp, fp, tn, fn]
+        if not self.data_only:
+            self.net = BlockModel([self._initialize_block(i) for i in range(self.num_blocks)],
+                                  self._initialize_final_output(), threshold=self.threshold,
+                                  train_tile=self.train_tile, use_image_features=self.use_image_features)
+
+            # define metrics
+            loss_col = tf.keras.metrics.Mean(name='loss')
+            loss_pos = tf.keras.metrics.Mean(name='pos_loss')
+            loss_neg = tf.keras.metrics.Mean(name='neg_loss')
+            tp = tf.keras.metrics.Mean(name='tp')
+            fp = tf.keras.metrics.Mean(name='fp')
+            tn = tf.keras.metrics.Mean(name='tn')
+            fn = tf.keras.metrics.Mean(name='fn')
+            self.standard = [loss_col, loss_pos, loss_neg, tp, fp, tn, fn]
 
     def _initialize_final_output(self) -> tf.keras.Model:
         """
