@@ -1,4 +1,5 @@
 import tensorflow as tf
+from scipy.optimize import linear_sum_assignment
 
 from histomics_detect.metrics import iou
 
@@ -50,3 +51,15 @@ def cluster_assignment(boxes: tf.Tensor, rpn_positive: tf.Tensor, min_threshold:
 
     clusters = tf.map_fn(assign_single_prediction, tf.range(0, tf.shape(rpn_positive)[0]))
     return tf.cast(clusters, tf.int32)
+
+
+@tf.function
+def tf_linear_sum_assignment(boxes, rpn_boxes):
+    ious, _ = iou(boxes, rpn_boxes)
+
+    out = tf.numpy_function(linear_sum_assignment, [ious, tf.constant(True)], [tf.int64, tf.int64])
+    row_ind, col_ind = out[0], out[1]
+
+    return tf.expand_dims(tf.cast(col_ind, tf.int32), axis=1)
+
+

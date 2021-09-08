@@ -2,6 +2,8 @@ import tensorflow as tf
 from typing import Tuple
 
 from histomics_detect.metrics import iou
+from histomics_detect.boxes.match import cluster_assignment
+from histomics_detect.models.lnms_loss import cluster_labels_indexes
 
 
 def lnms_metrics(boxes: tf.Tensor, rpn_boxes: tf.Tensor, scores: tf.Tensor) \
@@ -35,17 +37,8 @@ def lnms_metrics(boxes: tf.Tensor, rpn_boxes: tf.Tensor, scores: tf.Tensor) \
         false negatives
 
     """
-
-    ious, _ = iou(boxes, rpn_boxes)
-
-    def func(i) -> tf.int32:
-        index = tf.cast(i, tf.int32)
-        assignment = tf.cast(tf.argmax(ious[index]), tf.int32)
-        return assignment
-
-    indeces = tf.expand_dims(tf.map_fn(lambda x: func(x), tf.range(0, tf.shape(ious)[0])), axis=1)
-    labels = tf.scatter_nd(indeces, tf.ones(tf.shape(indeces)), tf.shape(scores))
-    print(indeces)
+    clusters = cluster_assignment(boxes, rpn_boxes)
+    labels, _ = cluster_labels_indexes(scores, clusters)
 
     tp = tf.reduce_sum(tf.cast(tf.logical_and(labels == 1, scores > 0.5), tf.int32))
     tn = tf.reduce_sum(tf.cast(tf.logical_and(labels == 0, scores <= 0.5), tf.int32))
