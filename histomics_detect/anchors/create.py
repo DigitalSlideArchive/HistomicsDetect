@@ -1,7 +1,7 @@
 import tensorflow as tf
 from typing import Tuple
 
-from histomics_detect.boxes import filter_edge_boxes
+from histomics_detect.boxes.transforms import filter_edge_boxes
 
 
 def create_anchors(anchor_px, field, width, height, filter_boxes=True):
