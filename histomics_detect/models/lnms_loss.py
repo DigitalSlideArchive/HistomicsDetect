@@ -2,7 +2,7 @@ import tensorflow as tf
 import tensorflow.keras.backend as kb
 from typing import List, Tuple
 
-from histomics_detect.metrics import iou
+from histomics_detect.metrics.iou import iou
 
 
 def normal_loss(loss_object: tf.keras.losses.Loss, boxes: tf.Tensor, rpn_boxes_positive: tf.Tensor,

@@ -1,7 +1,7 @@
 import tensorflow as tf
 from scipy.optimize import linear_sum_assignment
 
-from histomics_detect.metrics import iou
+from histomics_detect.metrics.iou import iou
 
 
 def cluster_assignment(boxes: tf.Tensor, rpn_positive: tf.Tensor, min_threshold: float = 0.0,

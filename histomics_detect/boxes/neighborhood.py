@@ -2,7 +2,7 @@ from typing import Union
 import tensorflow as tf
 import tensorflow.keras.backend as kb
 
-from histomics_detect.metrics import iou
+from histomics_detect.metrics.iou import iou
 
 
 def assemble_single_neighborhood(anchor_id: int, interpolated: tf.Tensor, neighborhood_indeces: tf.Tensor,
