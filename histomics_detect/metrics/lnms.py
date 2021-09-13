@@ -2,7 +2,8 @@ import tensorflow as tf
 from typing import Tuple
 
 
-def lnms_metrics(boxes: tf.Tensor, rpn_boxes: tf.Tensor, scores: tf.Tensor) \
+def lnms_metrics(boxes: tf.Tensor, rpn_boxes: tf.Tensor, scores: tf.Tensor, min_threshold: float = 0.0,
+                       apply_threshold: bool = False) \
         -> Tuple[int, int, int, int]:
     """
     calculates the number of true positives, false positives, true negatives, false negatives of the
@@ -20,6 +21,11 @@ def lnms_metrics(boxes: tf.Tensor, rpn_boxes: tf.Tensor, scores: tf.Tensor) \
     scores: tensor (float32)
         M x 1 tensor where each row contains the objectiveness score of the corresponding
         rpn_boxes
+    min_threshold: float
+        if box has no ground truth with an iou higher than 'min_threshold' this box is considered an outlier
+        and is not assigned to a cluster
+    apply_threshold: bool
+        set assignment of boxes with overlap less than threshold to -1
 
     Returns
     -------
@@ -33,6 +39,7 @@ def lnms_metrics(boxes: tf.Tensor, rpn_boxes: tf.Tensor, scores: tf.Tensor) \
         false negatives
 
     """
+    # in function imports needed because of circular imports
     from histomics_detect.boxes.match import cluster_assignment
     from histomics_detect.models.lnms_loss import cluster_labels_indexes
 

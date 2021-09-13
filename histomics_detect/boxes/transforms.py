@@ -179,7 +179,7 @@ def _unstack_box_array(boxes):
     return x, y, w, h
 
 
-def filter_edge_boxes(boxes, width: float, height: float, margin: float = 5.0):
+def filter_edge_boxes(boxes, width: float, height: float, margin: float = 5.0, return_condition: bool = False):
     """Filters out boxes that cross the margin of the image boundary
 
         a box is kept if all the points are within the image boundary inset by the margin parameter.
@@ -191,6 +191,8 @@ def filter_edge_boxes(boxes, width: float, height: float, margin: float = 5.0):
 
         Parameters
         ----------
+        return_condition: bool
+            returns the filter condition as well as the filtered boxes
         margin: float
             offset from the border of the image border where boxes that overlap are removed
         height: float
@@ -207,6 +209,10 @@ def filter_edge_boxes(boxes, width: float, height: float, margin: float = 5.0):
             N x 4 tensor where each row contains the x,y location of the upper left
             corner of a ground truth box and its width and height in that order.
             All boxes that have at least one point in the margin have been removed.
+        condition: tensor (bool) [optional]
+            N x 1 tensor one bool for each box
+            true -> box is kept
+            false -> box is removed
         """
     margin = tf.cast(margin, tf.float32)
     width = tf.cast(width, tf.float32)
@@ -224,4 +230,7 @@ def filter_edge_boxes(boxes, width: float, height: float, margin: float = 5.0):
 
     # stack columns and collect boxes that fulfill the condition
     filtered_boxes = tf.gather_nd(tf.stack([x, y, w, h], axis=1), tf.where(condition))
+
+    if return_condition:
+        return filtered_boxes, condition
     return filtered_boxes

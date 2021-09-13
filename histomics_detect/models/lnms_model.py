@@ -345,11 +345,11 @@ class LearningNMS(tf.keras.Model, ABC):
         """
         # calculate loss
         if self.loss_type == 'dummy':
-            scores = tf.expand_dims(nms_output[:, 0], axis=0)
+            scores = tf.expand_dims(nms_output[:, 0], axis=1)
             loss = tf.reduce_sum(self.loss_object(scores, tf.ones(tf.shape(nms_output))))
             labels = []
         elif self.loss_type == 'xor':
-            scores = tf.expand_dims(nms_output[:, 0], axis=0)
+            scores = tf.expand_dims(nms_output[:, 0], axis=1)
             clusters = cluster_assignment(boxes, rpn_boxes)
             loss, labels = xor_loss(scores, clusters)
             # loss, labels = self._cal_xor_loss(nms_output, cluster_assignment)
@@ -359,7 +359,7 @@ class LearningNMS(tf.keras.Model, ABC):
                                            self.standard, boxes, rpn_boxes, self.weighted_loss, self.neg_pos_loss,
                                            self.add_regression_param)
         elif self.loss_type == 'paper':
-            scores = tf.expand_dims(nms_output[:, 0], axis=0)
+            scores = tf.expand_dims(nms_output[:, 0], axis=1)
             loss, labels = paper_loss(boxes, rpn_boxes, scores, self.loss_object, self.positive_weight,
                                       self.standard, self.weighted_loss, self.neg_pos_loss)
         elif self.loss_type == 'clustering_normal':
@@ -369,7 +369,7 @@ class LearningNMS(tf.keras.Model, ABC):
                                                   self.neg_pos_loss, self.use_pos_neg_loss, self.norm_loss_weight,
                                                   self.add_regression_param)
         else:
-            scores = tf.expand_dims(nms_output[:, 0], axis=0)
+            scores = tf.expand_dims(nms_output[:, 0], axis=1)
             loss, labels = normal_loss(self.loss_object, boxes, rpn_boxes, scores, self.positive_weight,
                                        self.standard, neg_pos_loss=True)
 
