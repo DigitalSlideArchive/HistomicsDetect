@@ -210,7 +210,7 @@ def filter_edge_boxes(boxes, width: float, height: float, margin: float = 5.0, r
             corner of a ground truth box and its width and height in that order.
             All boxes that have at least one point in the margin have been removed.
         condition: tensor (bool) [optional]
-            N x 1 tensor one bool for each box
+            N  tensor one bool for each box
             true -> box is kept
             false -> box is removed
         """
