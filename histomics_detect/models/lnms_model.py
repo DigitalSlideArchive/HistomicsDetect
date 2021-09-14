@@ -254,12 +254,13 @@ class LearningNMS(tf.keras.Model, ABC):
         return {**losses, **metrics}
 
     def _cal_update_performance_stats(self, boxes, rpn_boxes, nms_output):
-        scores = tf.expand_dims(nms_output[:, 0], axis=1)
-        tp, tn, fp, fn = lnms_metrics(boxes, rpn_boxes, scores)
-        self.standard[3].update_state(tp/tf.shape(rpn_boxes)[0])
-        self.standard[4].update_state(fp/tf.shape(rpn_boxes)[0])
-        self.standard[5].update_state(tn/tf.shape(rpn_boxes)[0])
-        self.standard[6].update_state(fn/tf.shape(rpn_boxes)[0])
+        # scores = tf.expand_dims(nms_output[:, 0], axis=1)
+        # tp, tn, fp, fn = lnms_metrics(boxes, rpn_boxes, scores)
+        # self.standard[3].update_state(tp/tf.shape(rpn_boxes)[0])
+        # self.standard[4].update_state(fp/tf.shape(rpn_boxes)[0])
+        # self.standard[5].update_state(tn/tf.shape(rpn_boxes)[0])
+        # self.standard[6].update_state(fn/tf.shape(rpn_boxes)[0])
+        pass
 
     def train_step(self, data):
         norm, boxes, sample_weight = extract_data(data)

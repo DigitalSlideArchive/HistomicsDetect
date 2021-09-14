@@ -37,6 +37,10 @@ def lnms_metrics(boxes: tf.Tensor, rpn_boxes: tf.Tensor, scores: tf.Tensor, min_
                  apply_threshold: bool = True, score_threshold: float = 0.5, return_indexes: bool = False) \
         -> Union[Tuple[int, int, int], Tuple[int, int, int, tf.Tensor, tf.Tensor, tf.Tensor]]:
     """
+    DEPRECIATED
+
+    TODO remove
+
     calculates the number of true positives, false positives, true negatives, false negatives of the
     score prediction
 

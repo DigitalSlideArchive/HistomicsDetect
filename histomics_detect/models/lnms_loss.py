@@ -2,7 +2,7 @@ import tensorflow as tf
 import tensorflow.keras.backend as kb
 from typing import List, Tuple
 
-from histomics_detect.metrics.iou import iou
+from histomics_detect.metrics.iou import iou, greedy_iou
 
 
 def normal_loss(loss_object: tf.keras.losses.Loss, boxes: tf.Tensor, rpn_boxes_positive: tf.Tensor,
@@ -154,7 +154,7 @@ def paper_loss(boxes: tf.Tensor, rpn_boxes_positive: tf.Tensor, nms_output: tf.T
     return loss, indexes
 
 
-def calculate_labels(boxes, rpn_boxes_positive, output_shape):
+def calculate_labels(boxes, rpn_boxes_positive, output_shape, min_iou: float = 0.18):
     """
     calculate the labels for the predictions
     each ground truth has one positive predictions (label = 1) and the other predictions are
@@ -175,6 +175,8 @@ def calculate_labels(boxes, rpn_boxes_positive, output_shape):
         shape: N x 4
     output_shape: tensor (int32)
         shape of the label output
+    min_iou: float
+        minimum iou such that box is considered positive prediction
 
     Returns
     -------
@@ -185,19 +187,24 @@ def calculate_labels(boxes, rpn_boxes_positive, output_shape):
     indexes: tensor (int32)
         indexes of the predictions that are positive
     """
-    #TODO does double assignment either remove that
+    ious, _ = iou(rpn_boxes_positive, boxes)
 
-    ious, _ = iou(boxes, rpn_boxes_positive)
+    precision, recall, tp, fp, fn, tp_list, fp_list, fn_list = greedy_iou(ious, min_iou)
+
+    indexes = tf.reshape(tp_list[:, 0], (-1, 1))
+    labels = tf.scatter_nd(indexes, tf.ones(tf.shape(indexes)), output_shape)
+
+    # ious, _ = iou(boxes, rpn_boxes_positive)
 
     # function that finds prediction with highest overlap with ground truth
-    def assignment_func(i) -> tf.int32:
-        index = tf.cast(i, tf.int32)
-        assignment = tf.cast(tf.argmax(ious[index]), tf.int32)
-        return assignment
-
-    indexes = tf.map_fn(lambda x: assignment_func(x), tf.range(0, tf.shape(ious)[0]))
-    indexes = tf.expand_dims(indexes, axis=1)
-    labels = tf.scatter_nd(indexes, tf.ones(tf.shape(indexes)), output_shape)
+    # def assignment_func(i) -> tf.int32:
+    #     index = tf.cast(i, tf.int32)
+    #     assignment = tf.cast(tf.argmax(ious[index]), tf.int32)
+    #     return assignment
+    #
+    # indexes = tf.map_fn(lambda x: assignment_func(x), tf.range(0, tf.shape(ious)[0]))
+    # indexes = tf.expand_dims(indexes, axis=1)
+    # labels = tf.scatter_nd(indexes, tf.ones(tf.shape(indexes)), output_shape)
 
     return labels, indexes
 
