@@ -55,7 +55,8 @@ class LearningNMS(tf.keras.Model, ABC):
         if not self.data_only:
             self.net = BlockModel([self._initialize_block(i) for i in range(self.num_blocks)],
                                   self._initialize_final_output(), threshold=self.threshold,
-                                  train_tile=self.train_tile, use_image_features=self.use_image_features)
+                                  train_tile=self.train_tile, use_image_features=self.use_image_features,
+                                  use_distance=self.use_distance)
 
             # define metrics
             loss_col = tf.keras.metrics.Mean(name='loss')

@@ -2,12 +2,13 @@ from abc import ABC
 from typing import Tuple, List
 import tensorflow as tf
 
-from histomics_detect.boxes.neighborhood import assemble_single_neighborhood, all_neighborhoods_additional_info
+from histomics_detect.boxes.neighborhood import all_neighborhoods_additional_info
 
 
 class BlockModel(tf.keras.Model, ABC):
     def __init__(self, blocks: List[Tuple[tf.keras.Model, tf.keras.Model]], final_layers: tf.keras.Model,
-                 threshold: float = 0.5, train_tile: float = 224, use_image_features: bool = True):
+                 threshold: float = 0.5, train_tile: float = 224, use_image_features: bool = True,
+                 use_distance: bool = False):
         """
         Learning-NMS block model
 
@@ -20,11 +21,13 @@ class BlockModel(tf.keras.Model, ABC):
         final_layers: tf.keras.Model
             layers that compress the final prediction representations into the final output score
         threshold: float
-            threshold for two predictions to belong in the same neighbohood
+            threshold for two predictions to belong in the same neighborhood
         train_tile: float
             size of the image tile used for training
         use_image_features: bool
             true use image features when creating prediction representation
+        use_distance: bool
+            assemble neighborhood with distance instead of iou
         """
         super(BlockModel, self).__init__(name='block_model')
         self.blocks = blocks
@@ -33,6 +36,7 @@ class BlockModel(tf.keras.Model, ABC):
         self.threshold = threshold
         self.train_tile = train_tile
         self.use_image_features = use_image_features
+        self.use_distance = use_distance
 
     def call(self, x: Tuple[tf.Tensor, tf.Tensor], training: bool = False, mask=None):
         """
@@ -70,7 +74,8 @@ class BlockModel(tf.keras.Model, ABC):
         prediction_ids = tf.range(0, num_predictions) #TODO figure out why error here with lymphoma
 
         neighborhood_sizes, neighborhoods_add_info, neighborhoods_indexes, self_indexes = \
-            all_neighborhoods_additional_info(rpn_boxes_positive, prediction_ids, self.train_tile, self.threshold)
+            all_neighborhoods_additional_info(rpn_boxes_positive, prediction_ids, self.train_tile, self.threshold,
+                                              self.use_distance)
 
         for block, output in self.blocks:
             # run network on block

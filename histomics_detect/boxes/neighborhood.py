@@ -10,6 +10,8 @@ def assemble_single_neighborhood(anchor_id: int, interpolated: tf.Tensor, neighb
                                  use_joint_features: bool = False, use_cross_feature: bool = False) \
         -> tf.float32:
     """
+    DEPRECIATED: unused
+
     assembles the prediction representations for a neighborhood of a single prediction
 
     the neighborhood assembly of a single prediction consists of
@@ -151,9 +153,8 @@ def single_neighborhood_additional_info(anchor_id, ious, rpn_boxes_positive,
     return additional_info, neighborhood_indexes
 
 
-def all_neighborhoods_additional_info(rpn_boxes_positive, prediction_ids,
-                                      normalization_factor: float,
-                                      threshold: Union[float, tf.Tensor]):
+def all_neighborhoods_additional_info(rpn_boxes_positive, prediction_ids, normalization_factor: float,
+                                      threshold: Union[float, tf.Tensor], use_distance: bool = False):
     """
     collect additional info and indexes for all neighborhoods by running the method
     'single_neighborhood_additional_info' for each prediction and reformatting the collected data
@@ -186,6 +187,8 @@ def all_neighborhoods_additional_info(rpn_boxes_positive, prediction_ids,
         distance normalization divider
     threshold: float
         threshold for neighborhood
+    use_distance: bool
+        use distance for neighborhood assembly instead of iou
 
     Returns
     -------
@@ -201,7 +204,13 @@ def all_neighborhoods_additional_info(rpn_boxes_positive, prediction_ids,
     """
 
     # calculate distance or ious
-    ious, _ = iou(rpn_boxes_positive, rpn_boxes_positive)
+    if use_distance:
+        centroids = rpn_boxes_positive[:, :2] + rpn_boxes_positive[:, 2:]/2
+        dist_x = (tf.expand_dims(centroids[:, 0], axis=1) - tf.expand_dims(centroids[:, 0], axis=0))
+        dist_y = (tf.expand_dims(centroids[:, 1], axis=1) - tf.expand_dims(centroids[:, 1], axis=0))
+        ious = 1/(dist_x**2 + dist_y**2)
+    else:
+        ious, _ = iou(rpn_boxes_positive, rpn_boxes_positive)
 
     # assemble initial information
     neighborhood_sizes = tf.TensorArray(tf.int32, size=tf.shape(rpn_boxes_positive)[0])
