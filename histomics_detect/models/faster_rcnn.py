@@ -42,9 +42,9 @@ def map_outputs(output, anchors, anchor_px, field):
     """
   
     #get anchor size index for each matching anchor
-    index = tf.map_fn(lambda x: tf.argmax(tf.equal(x, anchor_px),
-                                          output_type=tf.int32),
-                      tf.cast(anchors[:,3], tf.int32))
+    index = tf.equal(tf.expand_dims(anchors[:,3], axis=1),
+                     tf.expand_dims(tf.cast(anchor_px, tf.float32), axis=0))
+    index = tf.cast(tf.where(index)[:,1], tf.int32)
 
     #use anchor centers to get positions of anchors in rpn output
     px = tf.cast((anchors[:,0]+ anchors[:,2]/2) / field, tf.int32)
