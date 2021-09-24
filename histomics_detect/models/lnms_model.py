@@ -260,7 +260,7 @@ class LearningNMS(tf.keras.Model, ABC):
 
         # run network
         nms_output = self.net((interpolated, rpn_boxes), training=True)
-        return nms_output
+        return features, rpn_boxes, scores, nms_output
 
     def test_step(self, data):
         norm, boxes, sample_weight = extract_data(data)
