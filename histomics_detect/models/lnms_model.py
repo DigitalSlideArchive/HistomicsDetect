@@ -7,7 +7,7 @@ from histomics_detect.anchors.create import create_anchors
 from histomics_detect.models.block_model import BlockModel
 from histomics_detect.roialign.roialign import roialign
 from histomics_detect.models.faster_rcnn import map_outputs
-from histomics_detect.boxes.transforms import unparameterize
+from histomics_detect.boxes.transforms import unparameterize, parameterize
 from histomics_detect.models.lnms_loss import normal_loss, clustering_loss, paper_loss, xor_loss, normal_clustering_loss
 from histomics_detect.metrics.lnms import lnms_metrics
 from histomics_detect.models.model_utils import extract_data
@@ -58,6 +58,9 @@ class LearningNMS(tf.keras.Model, ABC):
                                   train_tile=self.train_tile, use_image_features=self.use_image_features,
                                   use_distance=self.use_distance)
 
+            if self.use_reg:
+                self.init_regression = self._initialize_init_regression()
+
             # define metrics
             loss_col = tf.keras.metrics.Mean(name='loss')
             loss_pos = tf.keras.metrics.Mean(name='pos_loss')
@@ -67,6 +70,21 @@ class LearningNMS(tf.keras.Model, ABC):
             tn = tf.keras.metrics.Mean(name='tn')
             fn = tf.keras.metrics.Mean(name='fn')
             self.standard = [loss_col, loss_pos, loss_neg, tp, fp, tn, fn]
+
+    def _initialize_init_regression(self) -> tf.keras.Model:
+        feature_size_multiplier = 2 if self.combine_box_and_cross else 1
+        shape = (feature_size_multiplier * self.feature_size + 5)
+
+        init_input = tf.keras.Input(shape=shape, name="init_regression_input")
+
+        layer1 = tf.keras.layers.Dense(int(shape / 8), activation=self.activation, use_bias=True,
+                                       name=f'init_regression_layer_1')(init_input)
+        layer2 = tf.keras.layers.Dense(int(shape / 8), activation=self.activation, use_bias=True,
+                                       name=f'init_regression_layer_2')(layer1)
+        layer3 = tf.keras.layers.Dense(4, activation='linear', use_bias=True,
+                                       name=f'init_regression_layer_3')(layer2)
+
+        return tf.keras.Model(inputs=init_input, outputs=layer3, name="init_regression_network")
 
     def _initialize_final_output(self) -> tf.keras.Model:
         """
@@ -230,8 +248,19 @@ class LearningNMS(tf.keras.Model, ABC):
 
         return features, rpn_boxes, scores
 
-    def call(self, inputs, training=None, mask=None):
-        self.train_step(inputs)
+    def call(self, data, training=None, mask=None):
+        norm, boxes, sample_weight = extract_data(data)
+
+        features, rpn_boxes, scores = self.extract_boxes_n_scores(norm)
+
+        compressed_features = self.compression_net(features, training=False)
+
+        interpolated = self._interpolate_features(compressed_features, rpn_boxes)
+        interpolated = tf.concat([scores, interpolated], axis=1)
+
+        # run network
+        nms_output = self.net((interpolated, rpn_boxes), training=True)
+        return nms_output
 
     def test_step(self, data):
         norm, boxes, sample_weight = extract_data(data)
@@ -286,9 +315,13 @@ class LearningNMS(tf.keras.Model, ABC):
         if not self.compressed_gradient:
             compressed_features = self.compression_net(features, training=False)
 
+        if not self.interpolated_gradient:
             # calculate interpolated features
             interpolated = self._interpolate_features(compressed_features, rpn_boxes)
             interpolated = tf.concat([scores, interpolated], axis=1)
+
+        if self.use_reg:
+            rpn_reg_label = parameterize(rpn_boxes, boxes)
 
         # training step
         with tf.GradientTape(persistent=True) as tape:
@@ -296,9 +329,17 @@ class LearningNMS(tf.keras.Model, ABC):
             if self.compressed_gradient:
                 compressed_features = self.compression_net(features, training=True)
 
+            if self.interpolated_gradient:
                 # calculate interpolated features
                 interpolated = self._interpolate_features(compressed_features, rpn_boxes)
                 interpolated = tf.concat([scores, interpolated], axis=1)
+
+            if self.use_reg:
+                init_regression_input = tf.concat([interpolated, rpn_boxes], axis=1)
+                init_regression_output = self.init_regression(init_regression_input)
+
+                rpn_boxes = unparameterize(init_regression_output, rpn_boxes)
+                rpn_reg_loss = self.loss[1](rpn_reg_label, init_regression_output)
 
             # run network
             nms_output = self.net((interpolated, rpn_boxes), training=True)
@@ -307,6 +348,10 @@ class LearningNMS(tf.keras.Model, ABC):
 
         gradients = tape.gradient(loss, self.net.trainable_weights)
         self.optimizer.apply_gradients(zip(gradients, self.net.trainable_weights))
+
+        if self.use_reg:
+            gradients = tape.gradient(rpn_reg_loss, self.init_regression.trainable_weights)
+            self.optimizer.apply_gradients(zip(gradients, self.init_regression.trainable_weights))
 
         if self.use_image_features and self.compressed_gradient:
             gradients = tape.gradient(loss, self.compression_net)

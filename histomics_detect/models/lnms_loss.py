@@ -140,7 +140,7 @@ def paper_loss(boxes: tf.Tensor, rpn_boxes_positive: tf.Tensor, nms_output: tf.T
         num_pos = tf.cast(tf.size(positive_labels), tf.float32)
         num_neg = tf.cast(tf.size(negative_labels), tf.float32)
 
-        weight = labels * num_neg / num_pos * positive_weight + (1 - labels)
+        weight = labels * num_neg / (num_pos + 1e-8) * positive_weight + (1 - labels)
     else:
         weight = tf.ones(tf.shape(nms_output))
 
