@@ -44,9 +44,12 @@ def validate_model(ds_validation_roi: tf.data.Dataset, model: LearningNMS, faste
         rpn_boxes_final, condition = filter_edge_boxes(rpn_boxes_final, tf.shape(rgb)[1], tf.shape(rgb)[0], 32, True)
         scores = tf.reshape(tf.gather(scores, tf.where(condition)), (-1, 1))
 
-        ious, _ = iou(rpn_boxes_final, boxes)
+        if tf.size(rpn_boxes_final) > 0:
+            ious, _ = iou(rpn_boxes_final, boxes)
 
-        precision, recall, tp, fp, fn, tp_list, fp_list, fn_list = greedy_iou(ious, 0.18)
+            precision, recall, tp, fp, fn, tp_list, fp_list, fn_list = greedy_iou(ious, 0.18)
+        else:
+            tp, fp, fn = 0, 0, tf.shape(boxes)[0]
 
         scores = tf.reshape(scores, -1)
         obj = tf.stack([1 - scores, scores], axis=1)
