@@ -3,6 +3,7 @@ from histomics_detect.anchors.filter import filter_anchors
 from histomics_detect.anchors.sampling import sample_anchors
 from histomics_detect.boxes import parameterize, unparameterize, clip_boxes, tf_box_transform, filter_edge_boxes
 from histomics_detect.metrics import iou, greedy_iou, greedy_pr_auc
+from histomics_detect.networks.fast_rcnn import fast_rcnn
 from histomics_detect.networks.field_size import field_size
 from histomics_detect.roialign.roialign import roialign
 import tensorflow as tf
@@ -77,6 +78,7 @@ class FasterRCNN(tf.keras.Model):
         #add models to self
         self.rpnetwork = rpnetwork
         self.backbone = backbone
+        self.fastrcnn = fast_rcnn(backbone, tiles=tiles, pool=pool)
 
         #capture field, anchor sizes, loss mixing
         self.field = tf.cast(field_size(backbone), tf.float32)
