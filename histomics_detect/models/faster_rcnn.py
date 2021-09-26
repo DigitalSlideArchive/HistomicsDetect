@@ -42,9 +42,9 @@ def map_outputs(output, anchors, anchor_px, field):
     """
   
     #get anchor size index for each matching anchor
-    index = tf.map_fn(lambda x: tf.argmax(tf.equal(x, anchor_px),
-                                          output_type=tf.int32),
-                      tf.cast(anchors[:,3], tf.int32))
+    index = tf.equal(tf.expand_dims(anchors[:,3], axis=1),
+                     tf.expand_dims(tf.cast(anchor_px, tf.float32), axis=0))
+    index = tf.cast(tf.where(index)[:,1], tf.int32)
 
     #use anchor centers to get positions of anchors in rpn output
     px = tf.cast((anchors[:,0]+ anchors[:,2]/2) / field, tf.int32)
@@ -144,6 +144,51 @@ class FasterRCNN(tf.keras.Model):
         
         return {m.name: m.result() for m in self.metrics}
     
+        
+    def input_size(self, size=[None, None]):
+        """Sets input size dimensions for the backbone and region proposal networks. 
+        By default, the backbone and region proposal network have variable input image '
+        sizes. In some cases this may reduce the speed of training or inference. When
+        training or performing inference on uniform sized images, this procedure allows
+        the input to be set to a specific size. Default parameters reset these networks 
+        to variable size inputs.
+
+        Parameters
+        ----------
+        size: list of integers
+            The height and width of the input images for the backbone. Size of input to
+            region proposal network is calculated by devault. Default value is 
+            [None, None] for a variable input size.
+        """
+        
+        #get current backbone and rpnetwork channels
+        backbone_channels = self.backbone.layers[0].input_shape[0][-1]
+        rpnetwork_channels = self.rpnetwork.layers[0].input_shape[0][-1]
+        
+        #calculate rpnetwork input size from field size and input size
+        if all([dim is None for dim in size]):
+            rpnetwork_size = [None, None, rpnetwork_channels]
+        else:
+            rpnetwork_size = [tf.cast(tf.math.ceil(size[0]/self.field), tf.int32),
+                              tf.cast( tf.math.ceil(size[1]/self.field), tf.int32), 
+                              rpnetwork_channels]
+        
+        #pop input layers
+        self.backbone.layers.pop(0)
+        self.rpnetwork.layers.pop(0)
+                              
+        #create new input layers
+        backbone_input = tf.keras.Input(shape = size + [backbone_channels])
+        rpnetwork_input = tf.keras.Input(shape = rpnetwork_size)
+        
+        #update backbone
+        backbone_output = self.backbone(backbone_input)
+        self.backbone = tf.keras.Model(backbone_input, backbone_output)
+        
+        #update rpnetwork
+        rpnetwork_output = self.rpnetwork(rpnetwork_input)
+        self.rpnetwork = tf.keras.Model(rpnetwork_input, rpnetwork_output)
+        
         
     @tf.function
     def threshold(self, boxes, objectness, tau):
