@@ -54,6 +54,158 @@ def _roialign_coords(box, n_points):
     return sample
 
 
+def _bilinear(features, x, ys):
+    """
+    Performs bilinear interpolation of a 3d tensor along first two
+    dimensions. Used for calculations of roialign. Replacement for 
+    tensorflow addons bilinear interpolation.
+    
+    Parameters
+    ----------
+    features: tensor (float32)
+        A three-dimensional tensor (M, N, K) where the third dimension are
+        features / channels.    
+    x: tensor (float32)
+        Horizontal coordinates where linear interpolation is desired.
+    y: tensor (float32)
+        Vertical coordinates where linear interpolation is desired.    
+        
+    Outputs
+    -------
+    interpolated: tensor (float32)
+        An (d, 1, K) tensor where d is the number of points to interpolate.
+    """    
+    
+    #calculate top/bottom, left/right reference positions
+    lower_y, upper_y = _linear_indices(y, tf.shape(f)[0])
+    lower_x, upper_x = _linear_indices(x, tf.shape(f)[1])
+    
+    #feature values at horizontal reference locations
+    fly_lx, fly_ux = _linear_f(features, lower_y, lower_x, upper_x, axis=1)
+    fuy_lx, fuy_ux = _linear_f(features, upper_y, lower_x, upper_x, axis=1)
+    
+    #horizontal linear interpolation
+    fly = _linear_interp(fly_lx, fly_ux, x, lower_x)
+    fuy = _linear_interp(fuy_lx, fuy_ux, x, lower_x)
+    
+    #vertical linear interpolation
+    interpolated = _linear_interp(fly, fuy, y, lower_y)
+    
+    #reshape output to return 3d tensor
+    interpolated = tf.reshape(interpolated, 
+                              [tf.size(x), 1, tf.shape(features)[-1]])  
+    
+    return interpolated
+
+
+def _linear_indices(x, dim):
+    """
+    Calculates locations of upper and lower reference points used for
+    interpolation.
+    
+    Parameters
+    ----------
+    x: tensor (float32)
+        Coordinates where linear interpolation is desired (either
+        x or y values). 
+    dim: int
+        Size of the tensor to interpolate along that dimension.
+        
+    Outputs
+    -------
+    lower: tensor (int32)
+        Index for left/top location to use for interpolation.
+    upper: tensor (int32)
+        Index for right/bottom location to use for interpolation.
+    """
+    
+    #calculate lower and upper indices for interpolation
+    lower = tf.cast(tf.minimum(tf.maximum(0.0, tf.math.floor(x)), 
+                               tf.cast(dim-1, tf.float32)), tf.int32)
+    upper = tf.cast(tf.minimum(lower+1, dim-1), tf.int32)
+    
+    return lower, upper
+
+
+def _linear_f(features, fixed, lower, upper, axis):
+    """
+    Extracts feature values at left/right or top/bottom reference
+    points.
+    
+    Parameters
+    ----------
+    features: tensor (float32)
+        An M x N x K tensor containing features along dimension 2.
+    fixed: tensor (float32)
+        A d-length tensor containing the fixed coordinates (x or y) to be used 
+        in the interpolation. Bilinear interpolation is performed along each axis, 
+        holding the other fixed.
+    lower: tensor (float32)
+        A d-length tensor containing the coordinates of the top/left reference 
+        points.
+    upper: tensor (float32)
+        A d-length tensor containing the coordinates of the bottom/right 
+        reference points.
+    axis: int
+        The axis of features that the interpolation will be performed against.
+        Either 0 or 1.
+    
+    Outputs
+    -------
+    f_lower: tensor (float32)
+        A d x K tensor containing the feature values of top/left reference points
+        in rows.
+    f_upper: tensor (float32)
+        A d x K tensor containing the feature values of bottom/right reference 
+        points in rows.        
+    """
+    
+    #build tensors for calling gather_nd - assume axis=1 ('fixed' is y)
+    lower_indices = tf.stack([tf.cast(fixed, tf.int32), lower], axis=1)
+    upper_indices =  tf.stack([tf.cast(fixed, tf.int32), upper], axis=1)
+    
+    #if vertical interpolation (axis=0), switch indices for gather_nd
+    lower_indices = tf.gather(lower_indices, [1-axis, axis], axis=1)
+    upper_indices = tf.gather(upper_indices, [1-axis, axis], axis=1)
+    
+    #calculate slopes
+    f_lower = tf.gather_nd(features, lower_indices)
+    f_upper = tf.gather_nd(features, upper_indices)
+
+    return f_lower, f_upper
+
+
+def _linear_interp(f_lower, f_upper, x, lower):
+    """
+    One-dimensional interpolation given the features values at reference points.
+    
+    Parameters
+    ----------
+    f_lower: tensor (float32)
+        A d x K array containing feature values at d left/top reference points.
+    f_upper: tensor (float32)
+        A d x K array containing feature values at d right/bottom reference points.
+    x: tensor (float32)
+        A d-length array containing the horizontal/vertical coordinates to interpolate at.
+    lower: tensor (float32)
+        A d-length array containing the coordinates of the left/top reference points.
+    
+    Outputs
+    -------
+    interpolated: tensor (float32)
+        A d x K array containing interpolated feature values at x.
+    """
+    
+    #calculate offsets between x and lower
+    dx = tf.maximum(0.0, x-tf.cast(lower, tf.float32))
+    
+    #calculate output
+    interpolated = f_lower + tf.multiply(tf.expand_dims(dx, axis=-1), 
+                                         f_upper-f_lower)  
+    
+    return interpolated
+
+
 def roialign(features, boxes, field, pool=2, tiles=3):
     """Performs roialign on a collection of regressed bounding boxes.
     
