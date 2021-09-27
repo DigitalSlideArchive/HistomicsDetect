@@ -17,7 +17,7 @@ def plot_inference(rgb: tf.Tensor, boxes: tf.Tensor, nms_output: tf.Tensor, rpn_
                    save_fig: bool = False, fig_path: str = 'plot_of_inference.png', filter_edge: bool = False,
                    filter_margin: int = 32, threshold: float = 0.5, figsize: Tuple[int, int] = (20, 20),
                    gt_colors: Tuple[str, str] = ('g', 'r'), pred_colors: Tuple[str, str] = ('g', 'r'),
-                   pred_size: int = 300, print_prediction_numbers: bool = True) -> None:
+                   pred_size: int = 300, print_prediction_numbers: bool = True, show_axis: bool = True) -> None:
     """
     calculates the statistic of previously run output and plots it
 
@@ -43,7 +43,6 @@ def plot_inference(rgb: tf.Tensor, boxes: tf.Tensor, nms_output: tf.Tensor, rpn_
     filter_margin: int
         min distance to border not to be filtered out
     threshold: float
-
     figsize: Tuple[int, int]
         dimensions of figure
     gt_colors: Tuple[str, str]
@@ -52,8 +51,9 @@ def plot_inference(rgb: tf.Tensor, boxes: tf.Tensor, nms_output: tf.Tensor, rpn_
         color of true positive prediction, color of false positive prediction
     pred_size: int
         size of dot symbolizing a prediction
-    print_prediction_numbers:
+    print_prediction_numbers: bool
         true -> print statistic of tp, fp, fn
+    show_axis: bool
 
     Returns
     -------
@@ -98,6 +98,9 @@ def plot_inference(rgb: tf.Tensor, boxes: tf.Tensor, nms_output: tf.Tensor, rpn_
     if tf.size(positive_pred_d) > 0:
         plt.scatter(positive_pred_d[:, 0], positive_pred_d[:, 1], color=pred_colors[0], s=pred_size)
 
+    if not show_axis:
+        plt.axis('off')
+
     plt.show()
     if save_fig:
         fig.savefig(fig_path)
@@ -106,8 +109,8 @@ def plot_inference(rgb: tf.Tensor, boxes: tf.Tensor, nms_output: tf.Tensor, rpn_
 def run_plot(validation_data, model: tf.keras.Model, index: int = 0, save_fig: bool = False,
              fig_path: str = 'plot_of_inference.png', filter_edge: bool = False, filter_margin: int = 32,
              threshold: float = 0.5, figsize: Tuple[int, int] = (20, 20),gt_colors: Tuple[str, str] = ('g', 'r'),
-             pred_colors: Tuple[str, str] = ('g', 'r'), pred_size: int = 300, print_prediction_numbers: bool = True)\
-        -> None:
+             pred_colors: Tuple[str, str] = ('g', 'r'), pred_size: int = 300, print_prediction_numbers: bool = True,
+             show_axis: bool = True) -> None:
     """
     runs the given model and plots the inference
     Returns
@@ -134,4 +137,4 @@ def run_plot(validation_data, model: tf.keras.Model, index: int = 0, save_fig: b
     nms_output2 = tf.expand_dims(nms_output2[:, 0], axis=1)
 
     plot_inference(rgb, boxes, nms_output2, rpn_boxes, save_fig, fig_path, filter_edge, filter_margin, threshold,
-                   figsize, gt_colors, pred_colors, pred_size, print_prediction_numbers)
+                   figsize, gt_colors, pred_colors, pred_size, print_prediction_numbers, show_axis)
