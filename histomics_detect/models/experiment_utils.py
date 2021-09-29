@@ -1,6 +1,7 @@
 from typing import List, Union
 
 import tensorflow as tf
+import numpy as np
 import json
 
 from histomics_detect.models.lnms_model import LearningNMS
@@ -21,13 +22,14 @@ def save_history(history_callback, model: tf.keras.Model, experiment_id: int,
 
 def validate_model(ds_validation_roi: tf.data.Dataset, model: LearningNMS, faster_model, experiment_id: int = 0,
                    path: str = "JsonLogs/logs_{}_auc.json"):
-    tp_counter, fp_counter, fn_counter = 0, 0, 0
+    tp_counter, fp_counter, fn_counter = np.float32(0), np.float32(0), np.float32(0)
     aucs = dict()
-    average_auc = 0
-    counter = 0
+    average_auc = np.float32(0)
+    counter = np.float32(0)
 
     for data in ds_validation_roi:
         (rgb, boxes, name) = data
+        boxes = boxes.to_tensor()
         width, height, _ = tf.shape(rgb)
 
         model.anchors = create_anchors(model.anchor_px, model.field, height, width)
@@ -36,26 +38,38 @@ def validate_model(ds_validation_roi: tf.data.Dataset, model: LearningNMS, faste
 
         filtered_boxes = tf.squeeze(
             tf.gather(rpn_boxes, tf.where(tf.greater(tf.reshape(nms_output, -1), 0.5))))
-        rpn_boxes_final = faster_model.align(filtered_boxes, features, faster_model.field, faster_model.pool,
-                                             faster_model.tiles)
+        if tf.size(filtered_boxes) > 0:
+            try:
+                rpn_boxes_final = faster_model.align(filtered_boxes, features, faster_model.field, faster_model.pool,
+                                                     faster_model.tiles)
 
-        boxes = filter_edge_boxes(boxes, tf.shape(rgb)[1], tf.shape(rgb)[0], 32)
+                boxes = filter_edge_boxes(boxes, tf.shape(rgb)[1], tf.shape(rgb)[0], 32)
 
-        rpn_boxes_final, condition = filter_edge_boxes(rpn_boxes_final, tf.shape(rgb)[1], tf.shape(rgb)[0], 32, True)
-        scores = tf.reshape(tf.gather(scores, tf.where(condition)), (-1, 1))
+                rpn_boxes_final, condition = filter_edge_boxes(rpn_boxes_final, tf.shape(rgb)[1], tf.shape(rgb)[0], 32,
+                                                               True)
+                scores = tf.reshape(tf.gather(scores, tf.where(condition)), (-1, 1))
 
-        if tf.size(rpn_boxes_final) > 0:
-            ious, _ = iou(rpn_boxes_final, boxes)
+                if tf.size(rpn_boxes_final) > 0:
+                    ious, _ = iou(rpn_boxes_final, boxes)
 
-            precision, recall, tp, fp, fn, tp_list, fp_list, fn_list = greedy_iou(ious, 0.18)
+                    precision, recall, tp, fp, fn, tp_list, fp_list, fn_list = greedy_iou(ious, 0.18)
+                    tp, fp, fn = tp.numpy(), fp.numpy(), fn.numpy()
+                else:
+                    tp, fp, fn = 0, 0, tf.shape(boxes)[0].numpy()
+            except:
+                tp, fp, fn = 0, 0, tf.shape(boxes)[0].numpy()
+
+            try:
+                scores = tf.reshape(scores, -1)
+                obj = tf.stack([1 - scores, scores], axis=1)
+                auc = greedy_pr_auc(obj, rpn_boxes_final, boxes, delta=0.1, min_iou=0.18)
+                aucs[str(name.numpy())] = auc.numpy().item()
+                average_auc += auc.numpy()
+            except:
+                aucs[str(name.numpy())] = 0
         else:
-            tp, fp, fn = 0, 0, tf.shape(boxes)[0]
-
-        scores = tf.reshape(scores, -1)
-        obj = tf.stack([1 - scores, scores], axis=1)
-        auc = greedy_pr_auc(obj, rpn_boxes_final, boxes, delta=0.1, min_iou=0.18)
-        aucs[name.numpy()] = auc
-        average_auc += auc
+            tp, fp, fn = 0, 0, tf.shape(boxes)[0].numpy()
+            aucs[str(name.numpy())] = 0
 
         tp_counter += tp
         fp_counter += fp
@@ -64,13 +78,21 @@ def validate_model(ds_validation_roi: tf.data.Dataset, model: LearningNMS, faste
 
     log = {
         'counter': counter,
-        'fp': fp_counter,
-        'tp': tp_counter,
-        "fn": fn_counter,
+        'fp': fp_counter.item(),
+        'tp': tp_counter.item(),
+        "fn": fn_counter.item(),
         'aucs': aucs,
-        'auc': average_auc,
-        'avg_auc': average_auc/counter
+        'auc': average_auc.item(),
+        'avg_auc': average_auc.item() / counter
     }
+
+    for key, value in log.items():
+        print(key, value, type(value))
+
+    for key, value in log['aucs'].items():
+        print(str(key), value, type(value))
+
+    print(log)
 
     with open(path.format(experiment_id), 'w') as file:
         json.dump(log, file)
@@ -84,7 +106,6 @@ def run_experiments(ds_train_roi, ds_validation_roi, callbacks: List[tf.keras.ca
                     faster_model: tf.keras.Model, optimizer: tf.keras.optimizers.Optimizer,
                     changing_variable: str, values: List[Union[str, tf.keras.losses.Loss, int, float, tf.Tensor]],
                     experiment_start_id: int = 0, epochs: int = 100, steps_per_epoch: int = 92) -> None:
-
     experiment_id = experiment_start_id
     for value in values:
         temp_configs = configs.copy()
@@ -97,10 +118,15 @@ def run_experiments(ds_train_roi, ds_validation_roi, callbacks: List[tf.keras.ca
                             [temp_configs['width'], temp_configs['height']], )
         model.compile(optimizer=optimizer)
 
-        history_callback = model.fit(x=ds_train_roi, batch_size=1, epochs=epochs, verbose=1,
-                                     callbacks=callbacks, steps_per_epoch=steps_per_epoch)  # 92
-
-        save_history(history_callback, model, experiment_id)
-        validate_model(ds_validation_roi, model, faster_model, experiment_id)
+        try:
+            history_callback = model.fit(x=ds_train_roi, batch_size=1, epochs=epochs, verbose=1,
+                                         callbacks=callbacks, steps_per_epoch=steps_per_epoch)  # 92
+            try:
+                save_history(history_callback, model, experiment_id)
+                validate_model(ds_validation_roi, model, faster_model, experiment_id)
+            except:
+                print("validation or save failed")
+        except:
+            print("training failed")
 
         experiment_id += 1

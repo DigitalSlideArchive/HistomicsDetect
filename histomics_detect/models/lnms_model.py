@@ -98,7 +98,7 @@ class LearningNMS(tf.keras.Model, ABC):
         final_output: tf.keras.Model
             network for compressing neighborhood to single prediction vector
         """
-        feature_size_multiplier = 2 if self.combine_box_and_cross else 1
+        feature_size_multiplier = 2 if self.combine_box_and_cross and self.use_image_features else 1
 
         final_input = tf.keras.Input(shape=self.feature_size * feature_size_multiplier + 1,
                                      name="final_after_block_layers_input")
@@ -140,9 +140,9 @@ class LearningNMS(tf.keras.Model, ABC):
         block, output: tf.keras.Model, tf.keras.Model
             block keras model, output keras model
         """
-        feature_size_multiplier = 2 if self.combine_box_and_cross else 1
+        feature_size_multiplier = 2 if self.combine_box_and_cross and self.use_image_features else 1
 
-        shape = 6 + (feature_size_multiplier * 2 * self.feature_size + 2 if self.use_image_features else 2)
+        shape = 6 + (feature_size_multiplier * 2 * self.feature_size + 2)
         block_input = tf.keras.Input(shape=shape, name=f'block_{block_id}_input')
         x = tf.keras.layers.BatchNormalization(axis=1, name=f'block_{block_id}_batch_norm_0_layer')(block_input)
         for i in range(self.num_layers_block):

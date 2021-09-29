@@ -71,7 +71,7 @@ class BlockModel(tf.keras.Model, ABC):
 
         # initialize loop paramters
         num_predictions = tf.shape(rpn_boxes_positive)[0]
-        prediction_ids = tf.range(0, num_predictions) #TODO figure out why error here with lymphoma
+        prediction_ids = tf.range(0, num_predictions)
 
         neighborhood_sizes, neighborhoods_add_info, neighborhoods_indexes, self_indexes = \
             all_neighborhoods_additional_info(rpn_boxes_positive, prediction_ids, self.train_tile, self.threshold,
@@ -89,7 +89,13 @@ class BlockModel(tf.keras.Model, ABC):
                 main_predictions = tf.reshape(tf.gather(interpolated, self_indexes), [-1, tf.shape(interpolated)[1]])
                 neighborhoods = tf.concat([neighborhood, main_predictions, neighborhoods_add_info], axis=1)
             else:
-                neighborhoods = neighborhoods_add_info
+                neighborhood = tf.reshape(tf.gather(interpolated[:, 0], neighborhoods_indexes),
+                                          [-1, tf.shape(interpolated)[1]])
+                main_predictions = tf.reshape(tf.gather(interpolated[:, 0], self_indexes),
+                                              [-1, tf.shape(interpolated)[1]])
+                empty_features = tf.zeros((tf.shape(neighborhoods_add_info)[0], tf.shape(interpolated)[1] - 1))
+                neighborhoods = tf.concat(
+                    [neighborhood, empty_features, main_predictions, empty_features, neighborhoods_add_info], axis=1)
             num_predictions = tf.size(neighborhood_sizes)
 
             # run block
