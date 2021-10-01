@@ -234,8 +234,8 @@ def _linear_f(features, fixed, lower, upper, axis):
     upper_indices = tf.gather(upper_indices, [axis, 1-axis], axis=1)
 
     #transform to linear indices to use gather instead of gather_nd and avoid OOM
-    lower_linear = lower_indices[:,1] * features.shape[-2] + lower_indices[:,0]
-    upper_linear = upper_indices[:,1] * features.shape[-2] + upper_indices[:,0]
+    lower_linear = lower_indices[:,1] * tf.shape(features)[-2] + lower_indices[:,0]
+    upper_linear = upper_indices[:,1] * tf.shape(features)[-2] + upper_indices[:,0]
 
     #create a reshaped view of 'features' for linear indexing
     reshaped = tf.reshape(features, [-1, tf.shape(features)[-1]])
