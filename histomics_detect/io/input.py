@@ -74,7 +74,7 @@ def dataset(path, png_parser, csv_parser, size, cases):
     ds = tf.data.Dataset.from_tensor_slices(matches)
     
     #map image and csv read operations to generate (rgb, boxes, pngfile) tuple
-    ds = ds_train_roi.map(lambda x: (read_image(x[0]), read_csv(x[1]), x[0]))
+    ds = ds.map(lambda x: (read_png(x[0]), read_csv(x[1]), x[0]))
     
     return ds
 
@@ -129,7 +129,7 @@ def read_csv(csv_file):
     return boxes
 
 
-def read_image(png_file):
+def read_png(png_file):
     """
     Reads a png file using tensorflow operations.
         
