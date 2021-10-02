@@ -1,5 +1,4 @@
 import os
-import pandas as pd
 from PIL import Image
 import tensorflow as tf
 
@@ -69,54 +68,86 @@ def dataset(path, png_parser, csv_parser, size, cases):
     
     #filter on image size
     matches = [(png, csv) for (png, csv) in matches if
-               (Image.open(png).size[0] > size) and (Image.open(png).size[1] > size)]    
+               (Image.open(png).size[0] > size) and (Image.open(png).size[1] > size)]
     
-    #build dataset
-    ds = tf.data.Dataset.from_tensor_slices(roi_tensors(matches))
-    ds = ds.map(lambda x: read_roi(x))
+    #create tf.data.Dataset object of pairs of csv/png files
+    ds = tf.data.Dataset.from_tensor_slices(matches)
+    
+    #map image and csv read operations to generate (rgb, boxes, pngfile) tuple
+    ds = ds.map(lambda x: (read_png(x[0]), read_csv(x[1]), x[0]))
     
     return ds
 
 
-def read_roi(roi):
-    """Reads the input image from disk and stacks ground truth boxes
-    in a ragged tensor.
+def read_csv(csv_file):
+    """
+    Reads a csv file describing bounding boxes using tensorflow operations.
     
-    Ragged tensors are needed because the number of boxes associated
-    with different images is variable. Input pipelines require uniform
-    sizes for standard tensors, where ragged tensors allow these functions
-    to be used in input pipelines when processing variable length data.
+    Each file should include a single header row, and each subsequent rows
+    describes a single box and contains the fields
+    
+        x (float) - horizontal upper-left corner of box (pixels)
+        y (float) - vertical upper-left corner of box (pixels)
+        w (float) - box width (pixels)
+        h (float) - box height (pixels)
+        label (string) - class label (optional)
+        center_x (float - optional) - horizontal center of box (for point annotations)
+        center_y (float - optional) - vertical center of box (for point annotations)
+        slide_x (float - optional) - horizontal upper-left corner of box in slide
+        slide_y (float - optional) - vertical upper-left corner of box in slide
+        type (string - optional) - the type of annotation, either 'box' or 'point'
+        contained (bool - optional) - if box or point is entirelycontained within roi
         
     Parameters
     ----------
-    roi: dict
-        This dict contains the path of the image file ('png') and the 
-        positions ('x', 'y') and size ('width', 'height') of associated
-        bounding boxes.
+    csv_file: string
+        Path and filename of the csv file.
+        
+    Returns
+    -------
+    ds: RaggedTensor
+        A ragged tensor where the each row contains the x,y location 
+        of the upper left corner of a ground truth box and its width and
+        height in that order.
+    """
+    
+    #read contents of csv
+    contents = tf.io.read_file(csv_file)
+
+    #split into lines
+    lines = tf.strings.split(contents, '\n')
+
+    #decode data lines
+    lines = tf.io.decode_csv(lines[1:-1],
+                             [0.0, 0.0, 0.0, 0.0, '', 0.0, 0.0, 0.0, 0.0, '', ''])
+    
+    #embed in ragged tensor
+    boxes = tf.RaggedTensor.from_tensor(tf.stack((lines[0], lines[1], 
+                                                  lines[2], lines[3]), 
+                                                 axis=1))
+
+    return boxes
+
+
+def read_png(png_file):
+    """
+    Reads a png file using tensorflow operations.
+        
+    Parameters
+    ----------
+    png_file: string
+        Path to the png file.
         
     Returns
     -------
     rgb: tensor
-        The image as a 2D or 3D tensor.
-    boxes: tensor (float32)
-        N x 4 tensor containing boxes where each row contains the x,y 
-        location of the upper left corner of a ground truth box and its width 
-        and height in that order.
+        Three dimensional rgb image tensor.
     """
     
     #read in png and get size
-    rgb = tf.io.decode_png(tf.io.read_file(roi['png'])) 
-
-    #get roi dimensions
-    height = tf.shape(rgb)[0]
-    width = tf.shape(rgb)[1]
-
-    #stack into ragged tensor
-    boxes = tf.RaggedTensor.from_tensor(tf.stack((roi['x'], roi['y'],
-                                                  roi['width'], roi['height']),
-                                                 axis=1))
-
-    return rgb, boxes, roi['png']
+    rgb = tf.io.decode_png(tf.io.read_file(png_file))
+    
+    return rgb
 
 
 def resize(rgb, boxes, factor):
@@ -156,48 +187,3 @@ def resize(rgb, boxes, factor):
     boxes = factor * boxes
     
     return rgb, boxes
-
-
-def roi_tensors(files):
-    """Generates dictionary of image file path and ground truth box values.
-    
-    Uses pandas to read csv files containing ground truth box information
-    and links these with the associated image filenames in a dict for use
-    with tensorflow Datasets.
-        
-    Parameters
-    ----------
-    files: array_like
-        A list of (.png, .csv) tuples containing the filenames and paths
-        to image files and associated bounding box tables.
-        
-    Returns
-    -------
-    roi: dict
-        This dict contains the path of the image file ('png') and the 
-        positions ('x', 'y') and size ('width', 'height') of associated
-        bounding boxes.
-    """
-
-    #parse .csv files to dict for tf dataset
-    rois = {'png': [], 'x': [], 'y': [], 'width': [], 'height': []}
-    for i, (png, csv) in enumerate(files):
-
-        #read .csv
-        table = pd.read_csv(csv)
-
-        #extract x, y, width, height
-        table = table.loc[table['type'] == 'box']
-        rois['png'].append(tf.convert_to_tensor(png))
-        rois['x'].append(tf.constant(table['x'], tf.float32))
-        rois['y'].append(tf.constant(table['y'], tf.float32))
-        rois['width'].append(tf.constant(table['width'], tf.float32))
-        rois['height'].append(tf.constant(table['height'], tf.float32))
-
-    rois['png'] = tf.ragged.stack(rois['png'])    
-    rois['x'] = tf.ragged.stack(rois['x'])
-    rois['y'] = tf.ragged.stack(rois['y'])
-    rois['width'] = tf.ragged.stack(rois['width'])
-    rois['height'] = tf.ragged.stack(rois['height'])
-
-    return rois
