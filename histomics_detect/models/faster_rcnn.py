@@ -392,7 +392,7 @@ class FasterRCNN(tf.keras.Model):
         boxes, _ = filter_edge_boxes(boxes, tf.shape(rgb)[1], tf.shape(rgb)[0], self.margin)
         
         #filter edge boxes
-        filtered_boxes, mask = filter_edge_boxes(align_boxes_nms, tf.shape(rgb)[1], 
+        filtered, mask = filter_edge_boxes(align_boxes_nms, tf.shape(rgb)[1], 
                                                  tf.shape(rgb)[0], self.margin)
         filtered_objectness = tf.boolean_mask(rpn_obj_nms, mask, axis=0)
         
@@ -400,7 +400,7 @@ class FasterRCNN(tf.keras.Model):
         align_ious = iou(filtered, boxes)
         
         #greedy iou mapping for precision-recall auc
-        tp, fp, fn, tp_list, fp_list, fn_list = greedy_iou(align_ious, self.map_iou)
+        tp, fp, fn, tp_list, fp_list, fn_list = greedy_iou_mapping(align_ious, self.map_iou)
         
         #update console
         tf.print(name)
