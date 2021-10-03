@@ -2,7 +2,7 @@ from histomics_detect.anchors.create import create_anchors
 from histomics_detect.anchors.filter import filter_anchors
 from histomics_detect.anchors.sampling import sample_anchors
 from histomics_detect.boxes import parameterize, unparameterize, clip_boxes, tf_box_transform, filter_edge_boxes
-from histomics_detect.metrics import iou, greedy_iou, greedy_pr_auc
+from histomics_detect.metrics import iou, greedy_iou, AveragePrecision
 from histomics_detect.networks.fast_rcnn import fast_rcnn
 from histomics_detect.networks.field_size import field_size
 from histomics_detect.roialign.roialign import roialign
@@ -105,7 +105,7 @@ class FasterRCNN(tf.keras.Model):
         self.anchors = create_anchors(anchor_px, self.field, shape[0], shape[1])
 
         #define metrics
-        self.statistics = [tf.keras.metrics.Mean(name='iou'),
+        self.statistics = [tf.keras.metrics.Mean(name='mean_iou'),
                            tf.keras.metrics.AUC(curve="PR", name='prauc'),
                            tf.keras.metrics.Recall(name='tpr'),
                            tf.keras.metrics.FalseNegatives(name='fn'),
@@ -389,15 +389,18 @@ class FasterRCNN(tf.keras.Model):
         align_boxes_nms = self.align(rpn_boxes_nms, features, self.field, self.pool, self.tiles)
         
         #clear margin of ground truth boxes
-        boxes = filter_edge_boxes(boxes, tf.shape(rgb)[1], tf.shape(rgb)[0], self.margin)
+        boxes, _ = filter_edge_boxes(boxes, tf.shape(rgb)[1], tf.shape(rgb)[0], self.margin)
         
-        #roialign accuracy measures
-        filtered = filter_edge_boxes(align_boxes_nms, tf.shape(rgb)[1], tf.shape(rgb)[0], self.margin)
-        align_ious, _ = iou(filtered, boxes)
+        #filter edge boxes
+        filtered_boxes, mask = filter_edge_boxes(align_boxes_nms, tf.shape(rgb)[1], 
+                                                 tf.shape(rgb)[0], self.margin)
+        filtered_objectness = tf.boolean_mask(rpn_obj_nms, mask, axis=0)
+        
+        #calculate ious
+        align_ious = iou(filtered, boxes)
         
         #greedy iou mapping for precision-recall auc
-        precision, recall, tp, fp, fn, tp_list, fp_list, fn_list = greedy_iou(align_ious, self.map_iou)
-        auc = greedy_pr_auc(rpn_obj_nms, rpn_boxes_nms, boxes, delta=0.1, min_iou=self.map_iou)
+        tp, fp, fn, tp_list, fp_list, fn_list = greedy_iou(align_ious, self.map_iou)
         
         #update console
         tf.print(name)
@@ -412,7 +415,8 @@ class FasterRCNN(tf.keras.Model):
         align_ious = tf.reduce_max(align_ious, axis=1)
         
         #measurements - algin iou for positive boxes, and objectness pr-auc, tp, fp, and fn
-        metrics = self._update_metrics(align_ious, rpn_obj, positive)
+        metrics = self._update_metrics(align_ious, filtered_objectness, 
+                                       tf.greater_equal(align_ious, self.map_iou))
 
         #dummy losses
         losses = {'loss_rpn_obj': 0., 'loss_rpn_reg': 0., 'loss_align_reg': 0.}        
@@ -498,7 +502,7 @@ class FasterRCNN(tf.keras.Model):
         self.optimizer.apply_gradients(zip(gradients, self.fastrcnn.trainable_weights))
     
         #ious for rpn, roialign
-        align_ious, _ = iou(align_boxes, boxes)
+        align_ious = iou(align_boxes, boxes)
         align_ious = tf.reduce_max(align_ious, axis=1)
 
         #update metrics
