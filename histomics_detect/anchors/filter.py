@@ -47,7 +47,7 @@ def filter_anchors(boxes, anchors, alpha=0.7, beta=0.3, gamma=0.3):
     """
 
     #calculate IOU between ground truth and anchors
-    ious, _ = iou(boxes, anchors)
+    ious = iou(boxes, anchors)
 
     #anchors where IOU > alpha
     matches = tf.cast(tf.where(tf.greater(ious, alpha)), dtype=tf.int32)
