@@ -2,7 +2,7 @@ from histomics_detect.anchors.create import create_anchors
 from histomics_detect.anchors.filter import filter_anchors
 from histomics_detect.anchors.sampling import sample_anchors
 from histomics_detect.boxes import parameterize, unparameterize, clip_boxes, tf_box_transform, filter_edge_boxes
-from histomics_detect.metrics import iou, greedy_iou_mapping, AveragePrecision
+from histomics_detect.metrics import iou, greedy_iou, greedy_pr_auc
 from histomics_detect.networks.fast_rcnn import fast_rcnn
 from histomics_detect.networks.field_size import field_size
 from histomics_detect.roialign.roialign import roialign
@@ -68,90 +68,10 @@ def map_outputs(output, anchors, anchor_px, field):
 
 
 class FasterRCNN(tf.keras.Model):
-    """
-    This class implements a faster RCNN model which combines a backbone feature
-    extraction network with a region proposal network. RoiAlign is used to 
-    interpolate and pool features for the variable-sized proposed boxes to support
-    refinement of boxes or downstream operations like classification (future 
-    enhancement). Class methods provide different levels of output processing,
-    from raw proposed regions and objectness scores, to proposals thresholded by
-    objectness score, non-max suppressed, and refined by roialign. Utility 
-    functions are available to apply non-max suppression or roialign. Training is
-    performed in single image batches.
-    
-    Attributes
-    ----------
-    backbone: tf.keras.Model
-        A fully-convolutional backbone model that produces an M x N x D feature map.
-    rpnetwork: tf.keras.Model
-        A convolutional model that produces objectness and parameterized regressions.
-    fastrcnn: tf.keras.Model
-        A fully-connected model that operates on roialigned outputs to produce
-        refined regressions. Future enhancements will extend this network to perform
-        classification.
-    field: float (integer-valued)
-        The field size in pixels of the backbone network.
-    anchor_px: tensor (int32)
-        One dimensional tensor of anchor sizes.
-    lmbda: float32
-        Loss weight for balancing objectness and regression losses of region
-        proposal network. Default value 10.0.
-    pool: int32
-        RoiAlign parameter. pool^2 is the number of locations to interpolate 
-        features at within each tile. Default value 2.
-    tiles: int32
-        RoiAlign parameter. tile^2 is the number of tiles that each regressed 
-        bounding box is divided into. Default value 3.
-    tau: float32
-        Threshold in range [0,1] used to select region proposals based on 
-        region proposal network objectness scores. Default value 0.5.
-    nms_iou: float32
-        Intersection over union threshold used to remove redundant proposals
-        during non-max suppression. Range is (0, 1]. Default value 0.3.
-    map_iou: float32
-        Minimum intersection over union threshold between a proposal and ground
-        truth object to call that proposal a detection. Used in calculating
-        test performance statistics.
-    margin: int32
-        The margin value is used to clear ground truth objects and proposals
-        from the edges of test images. All objects intersecting partially or
-        wholly with this margin will be removed. Default value 32 pixels.
-    anchors: tensor(float32)
-        Stored anchor locations for preset training size to reduce calculations 
-        during training.
-    
-    Methods
-    -------
-    call
-        Produces roialigned, non-max suppressed, and objectness thresholded
-        predictions given 
-    contructor
-        Combines backbone and region proposal networks and accepts training 
-        parameters for RoiAlign and image shape, and testing parameters for
-        objectness thresholding, clearing ground truth or predicted objects at
-        image margins, for non-max suppression, and for calculating average
-        precision metrics.
-    input_size
-        Used to set or reset input image size dimensions. Useful during training
-        and tiled inference.
-    threshold
-        Applies a threshold to objectness scores from the region proposal network
-        and returns filtered proposed boxes and objectness scores.
-    nms
-        Applies non-max suppression to region proposals using objectness scores.
-    align
-        Applies RoiAlign to region proposals.
-    raw
-        Generates the full unfiltered outputs from the region proposal network
-        inclding proposal regressions and their objectness scores.
-    call
-        Generates the objectness thresholded, non-max suppressed, and RoiAligned
-        proposals.
-    """
-    
-    def __init__(self, rpnetwork, backbone, shape, anchor_px, lmbda=10.0, 
-                 pool=2, tiles=3, tau=0.5, nms_iou=0.3, map_iou=0.5, margin=32,
-                 **kwargs):
+    def __init__(self, rpnetwork, backbone, shape, anchor_px, lmbda, 
+                 pool=2, tiles=3, tau=0.5, margin=32,
+                 nms_iou=0.3, map_iou=0.5,
+                 **kwargs):        
     
         super(FasterRCNN, self).__init__()
 
@@ -185,9 +105,7 @@ class FasterRCNN(tf.keras.Model):
         self.anchors = create_anchors(anchor_px, self.field, shape[0], shape[1])
 
         #define metrics
-        self.test_metrics = [AveragePrecision(iou_thresh = 0.5, delta=0.1),
-                             ]
-        self.statistics = [tf.keras.metrics.Mean(name='mean_iou'),
+        self.statistics = [tf.keras.metrics.Mean(name='iou'),
                            tf.keras.metrics.AUC(curve="PR", name='prauc'),
                            tf.keras.metrics.Recall(name='tpr'),
                            tf.keras.metrics.FalseNegatives(name='fn'),
@@ -195,8 +113,7 @@ class FasterRCNN(tf.keras.Model):
 
 
     def _update_metrics(self, ious, objectness, positive):
-        """
-        Updates tracked performance metrics used in training and validation. 
+        """Updates tracked performance metrics used in training and validation. 
         
         Parameters
         ----------
@@ -209,7 +126,8 @@ class FasterRCNN(tf.keras.Model):
         positive: tensor (bool)
             N length bool tensor indicating which rows contain objects that were
             judged positive based on 
-
+            
+        
         Returns
         -------
         metrics: dict
@@ -228,8 +146,7 @@ class FasterRCNN(tf.keras.Model):
     
         
     def input_size(self, size=[None, None]):
-        """
-        Sets input size dimensions for the backbone and region proposal networks. 
+        """Sets input size dimensions for the backbone and region proposal networks. 
         By default, the backbone and region proposal network have variable input image '
         sizes. In some cases this may reduce the speed of training or inference. When
         training or performing inference on uniform sized images, this procedure allows
@@ -275,8 +192,7 @@ class FasterRCNN(tf.keras.Model):
         
     @tf.function
     def threshold(self, boxes, objectness, tau):
-        """
-        Thresholds rpn predictions using objectness score. Helpful for processing
+        """Thresholds rpn predictions using objectness score. Helpful for processing
         raw inference results.
         
         Parameters
@@ -349,9 +265,7 @@ class FasterRCNN(tf.keras.Model):
     @tf.function
     def align(self, boxes, features, field, pool, tiles):
         """Performs roialign on filtered inference results. If results are not filtered
-        using objectness thresholding or non-max suppression prior to this step an OOM 
-        error may occur. Helpful for refinement of post-processed inference results from 
-        raw.
+        prior to this step an OOM error may occur. Helpful for processing raw inference results.
         
         Parameters
         ----------
@@ -371,9 +285,9 @@ class FasterRCNN(tf.keras.Model):
             
         Returns
         -------
-        align_boxes: tensor (float32)
+        align_boxes: tensor
             N x 4 tensor containing aligned boxes.
-        nms_objectness: tensor (float32)
+        nms_objectness tensor
             N x 2 tensor containing corresponding objectness scores.
         """
  
@@ -389,27 +303,10 @@ class FasterRCNN(tf.keras.Model):
     
     @tf.function
     def raw(self, rgb):
-        """
-        raw() produces unfiltered objectness scores and regressions from the rpn
+        """raw() produces unfiltered objectness scores and regressions from the rpn
         network, and backbone features. Additional steps are required for thresholding
         based on scores, nms, and performing roialign. This is useful for users who
-        would like to provide their own post-processing of rpn results.
-        
-        Parameters
-        ----------
-        rgb: tensor (uint8)
-            An M x N x 3 image to perform inference on.
-       
-        Returns
-        -------
-        rpn_obj: tensor (float32)
-            D x 2 tensor containing objectness scores from the region proposal network.
-        rpn_boxes: tensor (float32)
-            D x 4 tensor containing regressions from the region proposal network.
-        features: tensor (float32)
-            An M x N x K tensor of feature maps generated by the backbone. Can be used 
-            to subsequently apply RoiAlign or other operations.
-        """
+        would like to provide their own post-processing of rpn results."""
         
         #normalize image
         rgb = tf.keras.applications.resnet.preprocess_input(tf.cast(rgb, tf.float32))
@@ -439,30 +336,9 @@ class FasterRCNN(tf.keras.Model):
     
     @tf.function
     def call(self, rgb, tau=None, nms_iou=None):
-        """
-        call() produces thresholded and roialign refined predictions from a trained
+        """call() produces thresholded and roialign refined predictions from a trained
         network. This is the most useful for users who don't want to apply their own
-        post-processing to rpn results.
-        
-        Parameters
-        ----------
-        rgb: tensor (uint8)
-            An M x N x 3 image to perform inference on.
-        tau: float32
-            Threshold in range [0,1] used to select region proposals based on 
-            region proposal network objectness scores. Defaults to model attribute 
-            (default value 0.5).
-        nms_iou: float32
-            Intersection over union threshold used to remove redundant proposals
-            during non-max suppression. Range is (0, 1]. Defaults to model
-            attribute (default value 0.3).
-            
-        Returns
-        -------
-        align_boxes: tensor (float32)
-            A D x 4 tensor of objectness thresholded, non-max suppressed, and 
-            RoiAligned regoin proposals.
-        """
+        post-processing to rpn results."""
         
         #generate raw rpn outputs
         rpn_obj, rpn_boxes, features = self.raw(rgb)
@@ -488,10 +364,6 @@ class FasterRCNN(tf.keras.Model):
         
     @tf.function(experimental_relax_shapes=True)
     def test_step(self, data):
-        """
-        Test step performs inference on a single image, calculating both single-image
-        and aggregate metrics. Single-image metrics are printed to the stdout.
-        """
         
         #unpack image, boxes, and optional image name
         if len(data) ==3:
@@ -517,21 +389,21 @@ class FasterRCNN(tf.keras.Model):
         align_boxes_nms = self.align(rpn_boxes_nms, features, self.field, self.pool, self.tiles)
         
         #clear margin of ground truth boxes
-        boxes, _ = filter_edge_boxes(boxes, tf.shape(rgb)[1], tf.shape(rgb)[0], self.margin)     
+        boxes = filter_edge_boxes(boxes, tf.shape(rgb)[1], tf.shape(rgb)[0], self.margin)
         
-        #filter edge boxes
-        filtered, mask = filter_edge_boxes(align_boxes_nms, tf.shape(rgb)[1], 
-                                                 tf.shape(rgb)[0], self.margin)
-        filtered_objectness = tf.boolean_mask(rpn_obj_nms, mask, axis=0)
-        
-        #calculate ious
-        align_ious = iou(filtered, boxes)
+        #roialign accuracy measures
+        filtered = filter_edge_boxes(align_boxes_nms, tf.shape(rgb)[1], tf.shape(rgb)[0], self.margin)
+        align_ious, _ = iou(filtered, boxes)
         
         #greedy iou mapping for precision-recall auc
-        tp, fp, fn, tp_list, fp_list, fn_list = greedy_iou_mapping(align_ious, self.map_iou)
+        precision, recall, tp, fp, fn, tp_list, fp_list, fn_list = greedy_iou(align_ious, self.map_iou)
+        auc = greedy_pr_auc(rpn_obj_nms, rpn_boxes_nms, boxes, delta=0.1, min_iou=self.map_iou)
         
         #update console
         tf.print(name)
+        tf.print('greedy prauc', auc)
+        tf.print('greedy precision: ', precision)
+        tf.print('greedy recall: ', recall)
         tf.print('greedy tp: ', tp)
         tf.print('greedy fp: ', fp)
         tf.print('greedy fn: ', fn)
@@ -540,12 +412,7 @@ class FasterRCNN(tf.keras.Model):
         align_ious = tf.reduce_max(align_ious, axis=1)
         
         #measurements - algin iou for positive boxes, and objectness pr-auc, tp, fp, and fn
-        metrics = self._update_metrics(align_ious, filtered_objectness, 
-                                       tf.greater_equal(align_ious, self.map_iou))
-        
-        #update testing metrics
-        self.test.update_state(boxes, tf.concat([filtered_objectness, filtered], axis=1))
-        tf.print('greedy ap: ', self.test.result())
+        metrics = self._update_metrics(align_ious, rpn_obj, positive)
 
         #dummy losses
         losses = {'loss_rpn_obj': 0., 'loss_rpn_reg': 0., 'loss_align_reg': 0.}        
@@ -555,10 +422,6 @@ class FasterRCNN(tf.keras.Model):
     
     @tf.function
     def train_step(self, data):
-        """
-        Train step performs gradient updates on single image batches. Aggregate metrics are
-        calculated.
-        """
     
         #unpack image, boxes, and optional image name
         if len(data) ==3:
@@ -635,7 +498,7 @@ class FasterRCNN(tf.keras.Model):
         self.optimizer.apply_gradients(zip(gradients, self.fastrcnn.trainable_weights))
     
         #ious for rpn, roialign
-        align_ious = iou(align_boxes, boxes)
+        align_ious, _ = iou(align_boxes, boxes)
         align_ious = tf.reduce_max(align_ious, axis=1)
 
         #update metrics
