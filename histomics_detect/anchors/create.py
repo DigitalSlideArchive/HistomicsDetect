@@ -1,7 +1,5 @@
-import tensorflow as tf
-import matplotlib.pyplot as plt
-
 from histomics_detect.boxes import filter_edge_boxes
+import tensorflow as tf
 
 
 def create_anchors(anchor_px, field, width, height):
@@ -59,7 +57,7 @@ def create_anchors(anchor_px, field, width, height):
     anchors = tf.reshape(anchors * multiplier, (-1, 4))
 
     # remove anchors that cross the boundary
-    anchors = filter_edge_boxes(anchors, width, height, 0)
+    anchors, _ = filter_edge_boxes(anchors, width, height, 0)
 
     return anchors
 
