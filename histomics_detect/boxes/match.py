@@ -33,7 +33,7 @@ def cluster_assignment(boxes: tf.Tensor, rpn_positive: tf.Tensor) -> tf.Tensor:
         that element is the index of the closest ground truth box
 
     """
-    ious, _ = iou(rpn_positive, boxes)
+    ious = iou(rpn_positive, boxes)
 
     def assign_single_prediction(i) -> tf.int32:
         assignment = tf.argmax(ious[i])
