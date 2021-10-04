@@ -77,7 +77,7 @@ class AveragePrecision(tf.keras.metrics.Metric):
             return tf.stack([tp, fp, fn], axis=0)
     
         #calculate precision-recall values
-        packed = tf.map_fn(lambda x: threshold(obj, reg, boxes, x, self.iou_thresh),
+        packed = tf.map_fn(lambda x: threshold(obj, reg, y_true, x, self.iou_thresh),
                            taus, parallel_iterations=10, fn_output_signature=tf.int32)
 
         #unpack
