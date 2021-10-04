@@ -68,7 +68,7 @@ def plot_inference(rgb: tf.Tensor, boxes: tf.Tensor, nms_output: tf.Tensor, rpn_
         boxes = filter_edge_boxes(boxes, tf.shape(rgb)[1], tf.shape(rgb)[0], filter_margin)
 
     try:
-        ious, _ = iou(rpn_boxes, boxes)
+        ious = iou(rpn_boxes, boxes)
 
         precision, recall, tp, fp, fn, tp_list, fp_list, fn_list = greedy_iou(ious, 0.18)
 

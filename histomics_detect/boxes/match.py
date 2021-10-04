@@ -55,7 +55,7 @@ def cluster_assignment(boxes: tf.Tensor, rpn_positive: tf.Tensor, min_threshold:
 
 @tf.function
 def tf_linear_sum_assignment(boxes, rpn_boxes):
-    ious, _ = iou(boxes, rpn_boxes)
+    ious = iou(boxes, rpn_boxes)
 
     out = tf.numpy_function(linear_sum_assignment, [ious, tf.constant(True)], [tf.int64, tf.int64])
     row_ind, col_ind = out[0], out[1]

@@ -11,6 +11,7 @@ from histomics_detect.metrics import iou
 def neighborhood_free_data_formatting(data: Tuple[tf.Tensor, tf.Tensor, tf.Tensor], data_model: LearningNMS) \
         -> Tuple[tf.Tensor, tf.Tensor]:
     norm, boxes, sample_weight = extract_data(data)
+    data_model.initial_prediction_threshold = -1
 
     features, rpn_boxes, scores = data_model.extract_boxes_n_scores(norm)
 
@@ -27,7 +28,7 @@ def neighborhood_free_data_formatting(data: Tuple[tf.Tensor, tf.Tensor, tf.Tenso
     x_boxes = tf.tile(tf.expand_dims(rpn_boxes, axis=0), [num_boxes, 1, 1])
     y_boxes = tf.tile(tf.expand_dims(rpn_boxes, axis=1), [1, num_boxes, 1])
 
-    ious, _ = iou(rpn_boxes, rpn_boxes)
+    ious = iou(rpn_boxes, rpn_boxes)
     ious = tf.expand_dims(ious, axis=2)
 
     new_features = tf.concat((x_tiles, y_tiles, x_boxes, y_boxes, ious), axis=2)

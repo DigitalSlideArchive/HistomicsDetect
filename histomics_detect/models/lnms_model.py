@@ -7,9 +7,9 @@ from histomics_detect.anchors.create import create_anchors
 from histomics_detect.models.block_model import BlockModel
 from histomics_detect.roialign.roialign import roialign
 from histomics_detect.models.faster_rcnn import map_outputs
-from histomics_detect.boxes.transforms import unparameterize, parameterize
+from histomics_detect.boxes.transforms import unparameterize, parameterize, clip_boxes
 from histomics_detect.models.lnms_loss import normal_loss, clustering_loss, paper_loss, xor_loss, normal_clustering_loss
-from histomics_detect.metrics.lnms import lnms_metrics
+# from histomics_detect.metrics.lnms import lnms_metrics
 from histomics_detect.models.model_utils import extract_data
 from histomics_detect.boxes.match import cluster_assignment
 from histomics_detect.boxes.cross_boxes import cross_from_boxes
@@ -197,6 +197,9 @@ class LearningNMS(tf.keras.Model, ABC):
                 interpolated = tf.concat([interpolated, interpolated_box], axis=1)
             # TODO maybe concatenate instead of mean for cross
         else:
+            if self.expand_boxes:
+                rpn_boxes = tf.concat([rpn_boxes[:, :2]-self.box_expand_value, rpn_boxes[:, 2:]+self.box_expand_value*2])
+                rpn_boxes = clip_boxes(rpn_boxes, self.width, self.height)
             interpolated = roialign(features, rpn_boxes, self.field,
                                     pool=self.roialign_pool, tiles=self.roialign_tiles)
             interpolated = tf.reduce_mean(interpolated, axis=1)

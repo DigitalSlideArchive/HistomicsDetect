@@ -50,7 +50,7 @@ def validate_model(ds_validation_roi: tf.data.Dataset, model: LearningNMS, faste
                 scores = tf.reshape(tf.gather(scores, tf.where(condition)), (-1, 1))
 
                 if tf.size(rpn_boxes_final) > 0:
-                    ious, _ = iou(rpn_boxes_final, boxes)
+                    ious = iou(rpn_boxes_final, boxes)
 
                     precision, recall, tp, fp, fn, tp_list, fp_list, fn_list = greedy_iou(ious, 0.18)
                     tp, fp, fn = tp.numpy(), fp.numpy(), fn.numpy()

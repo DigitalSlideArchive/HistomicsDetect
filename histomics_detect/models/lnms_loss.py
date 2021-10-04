@@ -187,7 +187,7 @@ def calculate_labels(boxes, rpn_boxes_positive, output_shape, min_iou: float = 0
     indexes: tensor (int32)
         indexes of the predictions that are positive
     """
-    ious, _ = iou(rpn_boxes_positive, boxes)
+    ious = iou(rpn_boxes_positive, boxes)
 
     precision, recall, tp, fp, fn, tp_list, fp_list, fn_list = greedy_iou(ious, min_iou)
 

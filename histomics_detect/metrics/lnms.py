@@ -26,7 +26,7 @@ def tf_linear_sum_assignment(boxes, rpn_boxes):
         returns the indexes of the rpn_boxes assigned to the corresponding gt box
 
     """
-    ious, _ = iou(boxes, rpn_boxes)
+    ious = iou(boxes, rpn_boxes)
     out = tf.numpy_function(linear_sum_assignment, [ious, tf.constant(True)], [tf.int64, tf.int64])
     row_ind, col_ind = out[0], out[1]
 
@@ -91,7 +91,7 @@ def lnms_metrics(boxes: tf.Tensor, rpn_boxes: tf.Tensor, scores: tf.Tensor, min_
 
     rpn_boxes = tf.squeeze(tf.gather(rpn_boxes, tf.where(tf.greater(tf.reshape(scores, -1), score_threshold))))
 
-    ious, _ = iou(boxes, rpn_boxes)
+    ious = iou(boxes, rpn_boxes)
 
     tp_condition = tf.reduce_max(ious, axis=1) > min_threshold
 
