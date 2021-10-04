@@ -1,7 +1,6 @@
-import tensorflow as tf
 from typing import Tuple
-
-from histomics_detect.boxes.transforms import filter_edge_boxes
+from histomics_detect.boxes import filter_edge_boxes
+import tensorflow as tf
 
 
 def create_anchors(anchor_px, field, width, height, filter_boxes=True):
@@ -62,7 +61,8 @@ def create_anchors(anchor_px, field, width, height, filter_boxes=True):
 
     # remove anchors that cross the boundary
     if filter_boxes:
-        anchors = filter_edge_boxes(anchors, width, height, 0)
+        anchors, _ = filter_edge_boxes(anchors, width, height, 0)
+
 
     return anchors
 

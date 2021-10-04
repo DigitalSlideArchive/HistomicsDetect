@@ -1,6 +1,5 @@
 import tensorflow as tf
 
-
 def iou(source, target):
     """Calculates intersection over union (IoU) and intersection areas for two sets
     of objects with box representations.
@@ -49,10 +48,10 @@ def iou(source, target):
     #calculate iou
     iou = intersection / (ws*hs + tf.transpose(wt*ht) - intersection)
 
-    return iou, intersection
-  
-  
-def _greedy_iou_iteration(i, ious, source_mask, target_mask, matches):
+    return iou
+
+
+def _greedy_iou_mapping_iter(i, ious, source_mask, target_mask, matches):
     """Performs one iteration of greedy IoU mapping.
     
     This is the loop body of the greedy IoU mapping algorithm. This identifies the 
@@ -124,7 +123,7 @@ def _greedy_iou_iteration(i, ious, source_mask, target_mask, matches):
     return i, ious, source_mask, target_mask, matches
 
 
-def greedy_iou(ious, min_iou):
+def greedy_iou_mapping(ious, min_iou):
     """Calculates greedy IoU mapping between predictions and ground truth.
     
     Uses intersection-over-union scores to compute a greedy mapping between
@@ -172,7 +171,7 @@ def greedy_iou(ious, min_iou):
                                                             tf.shape(ious)[1]))
 
     #loop to perform greedy mapping
-    _, _, _, _, matches = tf.while_loop(condition, _greedy_iou_iteration,
+    _, _, _, _, matches = tf.while_loop(condition, _greedy_iou_mapping_iter,
                                         [i, ious, source_mask, target_mask, matches],
                                         parallel_iterations=10)
 
@@ -187,8 +186,6 @@ def greedy_iou(ious, min_iou):
     tp = tf.shape(matches)[0]
     fp = tf.shape(ious)[0] - tf.shape(matches)[0]
     fn = tf.shape(ious)[1] - tf.shape(matches)[0]
-    precision = tp / (tp + fp)
-    recall = tp / (tp + fn)
 
     #generate lists of indexes for TP, FP, FN
     tp_list = tf.cast(matches[:,0:2], tf.int32)
@@ -197,4 +194,4 @@ def greedy_iou(ious, min_iou):
     fn_list = tf.sets.difference([tf.range(tf.shape(ious)[1], dtype=tf.int32)],
                                  [tf.cast(matches[:,1], dtype=tf.int32)]).values
 
-    return precision, recall, tp, fp, fn, tp_list, fp_list, fn_list
+    return tp, fp, fn, tp_list, fp_list, fn_list
