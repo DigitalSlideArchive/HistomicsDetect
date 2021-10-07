@@ -1,4 +1,4 @@
-from .iou import greedy_iou_mapping
+from .iou import greedy_iou_mapping, iou
 import tensorflow as tf
 
 
