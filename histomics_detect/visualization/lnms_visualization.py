@@ -5,7 +5,7 @@ import tensorflow as tf
 
 from histomics_detect.boxes.transforms import filter_edge_boxes
 from histomics_detect.anchors.create import create_anchors
-from histomics_detect.metrics import greedy_iou
+from histomics_detect.metrics import greedy_iou_mapping
 from histomics_detect.metrics.iou import iou
 from histomics_detect.models.model_utils import extract_data
 from histomics_detect.models.lnms_model import LearningNMS
@@ -70,7 +70,7 @@ def plot_inference(rgb: tf.Tensor, boxes: tf.Tensor, nms_output: tf.Tensor, rpn_
     try:
         ious = iou(rpn_boxes, boxes)
 
-        precision, recall, tp, fp, fn, tp_list, fp_list, fn_list = greedy_iou(ious, 0.18)
+        tp, fp, fn, tp_list, fp_list, fn_list = greedy_iou_mapping(ious, 0.18)
 
         positive_pred = tf.reshape(tf.gather(rpn_boxes, tp_list[:, 0]), (-1, 4))
         negative_pred = tf.reshape(tf.gather(rpn_boxes, fp_list), (-1, 4))  # tf.where(labels == 0)
