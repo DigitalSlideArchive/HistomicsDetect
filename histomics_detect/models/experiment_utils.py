@@ -6,8 +6,7 @@ import json
 
 from histomics_detect.models.lnms_model import LearningNMS
 from histomics_detect.anchors.create import create_anchors
-from histomics_detect.metrics.iou import iou, greedy_iou
-from histomics_detect.metrics.pr import greedy_pr_auc
+from histomics_detect.metrics.iou import iou, greedy_iou_mapping
 from histomics_detect.boxes.transforms import filter_edge_boxes
 from histomics_detect.models.compression_network import CompressionNetwork
 
@@ -52,7 +51,7 @@ def validate_model(ds_validation_roi: tf.data.Dataset, model: LearningNMS, faste
                 if tf.size(rpn_boxes_final) > 0:
                     ious = iou(rpn_boxes_final, boxes)
 
-                    precision, recall, tp, fp, fn, tp_list, fp_list, fn_list = greedy_iou(ious, 0.18)
+                    tp, fp, fn, tp_list, fp_list, fn_list = greedy_iou_mapping(ious, 0.18)
                     tp, fp, fn = tp.numpy(), fp.numpy(), fn.numpy()
                 else:
                     tp, fp, fn = 0, 0, tf.shape(boxes)[0].numpy()
@@ -62,9 +61,9 @@ def validate_model(ds_validation_roi: tf.data.Dataset, model: LearningNMS, faste
             try:
                 scores = tf.reshape(scores, -1)
                 obj = tf.stack([1 - scores, scores], axis=1)
-                auc = greedy_pr_auc(obj, rpn_boxes_final, boxes, delta=0.1, min_iou=0.18)
-                aucs[str(name.numpy())] = auc.numpy().item()
-                average_auc += auc.numpy()
+                # auc = greedy_pr_auc(obj, rpn_boxes_final, boxes, delta=0.1, min_iou=0.18)
+                # aucs[str(name.numpy())] = auc.numpy().item()
+                # average_auc += auc.numpy()
             except:
                 aucs[str(name.numpy())] = 0
         else:
@@ -81,9 +80,9 @@ def validate_model(ds_validation_roi: tf.data.Dataset, model: LearningNMS, faste
         'fp': fp_counter.item(),
         'tp': tp_counter.item(),
         "fn": fn_counter.item(),
-        'aucs': aucs,
-        'auc': average_auc.item(),
-        'avg_auc': average_auc.item() / counter
+        # 'aucs': aucs,
+        # 'auc': average_auc.item(),
+        # 'avg_auc': average_auc.item() / counter
     }
 
     for key, value in log.items():
