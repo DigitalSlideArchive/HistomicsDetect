@@ -210,7 +210,7 @@ def all_neighborhoods_additional_info(rpn_boxes_positive, prediction_ids, normal
         dist_y = (tf.expand_dims(centroids[:, 1], axis=1) - tf.expand_dims(centroids[:, 1], axis=0))
         ious = 1/(dist_x**2 + dist_y**2)
     else:
-        ious, _ = iou(rpn_boxes_positive, rpn_boxes_positive)
+        ious = iou(rpn_boxes_positive, rpn_boxes_positive)
 
     # assemble initial information
     neighborhood_sizes = tf.TensorArray(tf.int32, size=tf.shape(rpn_boxes_positive)[0])
