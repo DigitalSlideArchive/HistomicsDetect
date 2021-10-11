@@ -90,9 +90,9 @@ class BlockModel(tf.keras.Model, ABC):
                 neighborhoods = tf.concat([neighborhood, main_predictions, neighborhoods_add_info], axis=1)
             else:
                 neighborhood = tf.reshape(tf.gather(interpolated[:, 0], neighborhoods_indexes),
-                                          [-1, tf.shape(interpolated)[1]])
+                                          [-1, 1])
                 main_predictions = tf.reshape(tf.gather(interpolated[:, 0], self_indexes),
-                                              [-1, tf.shape(interpolated)[1]])
+                                              [-1, 1])
                 empty_features = tf.zeros((tf.shape(neighborhoods_add_info)[0], tf.shape(interpolated)[1] - 1))
                 neighborhoods = tf.concat(
                     [neighborhood, empty_features, main_predictions, empty_features, neighborhoods_add_info], axis=1)
