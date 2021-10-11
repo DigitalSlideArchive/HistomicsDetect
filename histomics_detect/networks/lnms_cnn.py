@@ -17,7 +17,7 @@ def _generate_block(_id: int, num_layers: int, input_features: int, hidden_featu
                                            name=f"block_{_id}_hidden_layer_{i}")(current_layer)
 
         current_layer = new_layer
-    final_layer = tf.keras.layers.Conv2D(input_features, 3, activation=activation, padding='same',
+    final_layer = tf.keras.layers.Conv2D(input_features, 1 if similar else 3, activation=activation, padding='same',
                                          name=f"block_{_id}_final_layer")(current_layer)
 
     return tf.keras.Model(inputs=input_layer, outputs=final_layer, name=f"block_model_{_id}")

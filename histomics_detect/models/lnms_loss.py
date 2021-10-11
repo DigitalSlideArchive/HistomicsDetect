@@ -2,7 +2,7 @@ import tensorflow as tf
 import tensorflow.keras.backend as kb
 from typing import List, Tuple
 
-from histomics_detect.metrics.iou import iou, greedy_iou
+from histomics_detect.metrics.iou import iou, greedy_iou_mapping
 
 
 def normal_loss(loss_object: tf.keras.losses.Loss, boxes: tf.Tensor, rpn_boxes_positive: tf.Tensor,
@@ -189,7 +189,7 @@ def calculate_labels(boxes, rpn_boxes_positive, output_shape, min_iou: float = 0
     """
     ious = iou(rpn_boxes_positive, boxes)
 
-    precision, recall, tp, fp, fn, tp_list, fp_list, fn_list = greedy_iou(ious, min_iou)
+    precision, recall, tp, fp, fn, tp_list, fp_list, fn_list = greedy_iou_mapping(ious, min_iou)
 
     indexes = tf.reshape(tp_list[:, 0], (-1, 1))
     labels = tf.scatter_nd(indexes, tf.ones(tf.shape(indexes)), output_shape)

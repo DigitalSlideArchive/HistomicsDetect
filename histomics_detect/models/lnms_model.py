@@ -179,21 +179,23 @@ class LearningNMS(tf.keras.Model, ABC):
             shape: N x s
             interpolated feature for each box
         """
+        reduction_func = tf.reduce_mean if self.reduce_mean else tf.reduce_max
+
         # calculate interpolated features
         if self.cross_boxes:
             cross_boxes = cross_from_boxes(rpn_boxes, self.cross_scale, image_width=self.width, image_height=self.height)
             interpolated = roialign(features, tf.reshape(cross_boxes, (-1, 4)), self.field,
                                     pool=self.roialign_pool, tiles=self.roialign_tiles)
-            interpolated = tf.reduce_mean(interpolated, axis=1)
-            interpolated = tf.reduce_mean(interpolated, axis=1)
+            interpolated = reduction_func(interpolated, axis=1)
+            interpolated = reduction_func(interpolated, axis=1)
             interpolated = tf.reshape(interpolated, (tf.shape(rpn_boxes)[0], 2, -1))
-            interpolated = tf.reduce_mean(interpolated, axis=1)
+            interpolated = reduction_func(interpolated, axis=1)
 
             if self.combine_box_and_cross:
                 interpolated_box = roialign(features, rpn_boxes, self.field,
                                             pool=self.roialign_pool, tiles=self.roialign_tiles)
-                interpolated_box = tf.reduce_mean(interpolated_box, axis=1)
-                interpolated_box = tf.reduce_mean(interpolated_box, axis=1)
+                interpolated_box = reduction_func(interpolated_box, axis=1)
+                interpolated_box = reduction_func(interpolated_box, axis=1)
                 interpolated = tf.concat([interpolated, interpolated_box], axis=1)
             # TODO maybe concatenate instead of mean for cross
         else:
@@ -202,8 +204,8 @@ class LearningNMS(tf.keras.Model, ABC):
                 rpn_boxes = clip_boxes(rpn_boxes, self.width, self.height)
             interpolated = roialign(features, rpn_boxes, self.field,
                                     pool=self.roialign_pool, tiles=self.roialign_tiles)
-            interpolated = tf.reduce_mean(interpolated, axis=1)
-            interpolated = tf.reduce_mean(interpolated, axis=1)
+            interpolated = reduction_func(interpolated, axis=1)
+            interpolated = reduction_func(interpolated, axis=1)
 
         interpolated = tf.reshape(interpolated, [tf.shape(interpolated)[0], -1])
 
@@ -357,7 +359,7 @@ class LearningNMS(tf.keras.Model, ABC):
             self.optimizer.apply_gradients(zip(gradients, self.init_regression.trainable_weights))
 
         if self.use_image_features and self.compressed_gradient:
-            gradients = tape.gradient(loss, self.compression_net)
+            gradients = tape.gradient(loss, self.compression_net.trainable_weights)
             self.optimizer.apply_gradients(zip(gradients, self.compression_net.trainable_weights))
 
         self.standard[0].update_state(loss + 1e-8)
