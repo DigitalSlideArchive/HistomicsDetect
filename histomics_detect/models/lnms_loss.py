@@ -189,7 +189,7 @@ def calculate_labels(boxes, rpn_boxes_positive, output_shape, min_iou: float = 0
     """
     ious = iou(rpn_boxes_positive, boxes)
 
-    precision, recall, tp, fp, fn, tp_list, fp_list, fn_list = greedy_iou_mapping(ious, min_iou)
+    tp, fp, fn, tp_list, fp_list, fn_list = greedy_iou_mapping(ious, min_iou)
 
     indexes = tf.reshape(tp_list[:, 0], (-1, 1))
     labels = tf.scatter_nd(indexes, tf.ones(tf.shape(indexes)), output_shape)
