@@ -415,18 +415,18 @@ class LearningNMS(tf.keras.Model, ABC):
         elif self.loss_type == 'paper':
             scores = tf.expand_dims(nms_output[:, 0], axis=1)
             loss, labels = paper_loss(boxes, rpn_boxes, scores, self.loss_object, self.positive_weight,
-                                      self.standard, self.weighted_loss, self.neg_pos_loss)
+                                      self.standard, self.weighted_loss, self.neg_pos_loss, self.iou_threshold)
         elif self.loss_type == 'clustering_normal':
             clusters = cluster_assignment(boxes, rpn_boxes)
             loss, labels = normal_clustering_loss(nms_output, boxes, rpn_boxes, clusters, self.loss_object,
                                                   self.positive_weight, self.standard, self.weighted_loss,
                                                   self.neg_pos_loss, self.use_pos_neg_loss, self.norm_loss_weight,
-                                                  self.add_regression_param)
+                                                  self.add_regression_param, self.iou_threshold)
         elif self.loss_type == 'custom':
             loss, labels = self.custom_loss(self, nms_output, boxes, rpn_boxes)
         else:
             scores = tf.expand_dims(nms_output[:, 0], axis=1)
             loss, labels = normal_loss(self.loss_object, boxes, rpn_boxes, scores, self.positive_weight,
-                                       self.standard, neg_pos_loss=True)
+                                       self.standard, neg_pos_loss=True, min_iou=self.iou_threshold)
 
         return loss, labels

@@ -7,7 +7,8 @@ from histomics_detect.metrics.iou import iou, greedy_iou_mapping
 
 def normal_loss(loss_object: tf.keras.losses.Loss, boxes: tf.Tensor, rpn_boxes_positive: tf.Tensor,
                 scores: tf.Tensor, positive_weight: float, standard: List[tf.keras.metrics.Metric] = [],
-                weighted_loss: bool = False, neg_pos_loss: bool = False, use_pos_neg_loss: bool = False) \
+                weighted_loss: bool = False, neg_pos_loss: bool = False, use_pos_neg_loss: bool = False,
+                min_iou: float = 0.18) \
         -> Tuple[tf.Tensor, tf.Tensor]:
     """
     calculates the normal loss of a lnms output
@@ -48,6 +49,8 @@ def normal_loss(loss_object: tf.keras.losses.Loss, boxes: tf.Tensor, rpn_boxes_p
     use_pos_neg_loss: bool
         returns the weighted sum of the pos and neg loss instead of the normal loss
         !!! only works if neg_pos_loss is also true
+    min_iou: float
+        minimum iou such that box is considered positive prediction
 
     Returns
     -------
@@ -56,7 +59,7 @@ def normal_loss(loss_object: tf.keras.losses.Loss, boxes: tf.Tensor, rpn_boxes_p
     indexes: tensor (float32)
         indexes of the values that correspond to positive anchors
     """
-    labels, indexes = calculate_labels(boxes, rpn_boxes_positive, tf.shape(scores))
+    labels, indexes = calculate_labels(boxes, rpn_boxes_positive, tf.shape(scores), min_iou)
 
     # calculate negative and positive labels loss for comparing experiment
     if neg_pos_loss:
@@ -82,7 +85,7 @@ def normal_loss(loss_object: tf.keras.losses.Loss, boxes: tf.Tensor, rpn_boxes_p
 
 def paper_loss(boxes: tf.Tensor, rpn_boxes_positive: tf.Tensor, nms_output: tf.Tensor,
                loss_object: tf.keras.losses.Loss, positive_weight: float, standard: List[tf.keras.metrics.Metric],
-               weighted_loss: bool = False, neg_pos_loss: bool = False) \
+               weighted_loss: bool = False, neg_pos_loss: bool = False, min_iou: float = 0.18) \
         -> Tuple[tf.Tensor, tf.Tensor]:
     """
     loss calculation of the paper "Learning Non-Max Suppression"
@@ -120,7 +123,9 @@ def paper_loss(boxes: tf.Tensor, rpn_boxes_positive: tf.Tensor, nms_output: tf.T
         if true, loss of positive labels is weighted by the difference in numbers of positive and negative
         labels
     neg_pos_loss: bool
-        if true, the loss of the positive and the negative labels is calculated and logged in the metricsss
+        if true, the loss of the positive and the negative labels is calculated and logged in the metrixes
+    min_iou: float
+        minimum iou such that box is considered positive prediction
 
     Returns
     -------
@@ -130,7 +135,7 @@ def paper_loss(boxes: tf.Tensor, rpn_boxes_positive: tf.Tensor, nms_output: tf.T
         indexes of the values that correspond to positive anchors
 
     """
-    labels, indexes = calculate_labels(boxes, rpn_boxes_positive, tf.shape(nms_output))
+    labels, indexes = calculate_labels(boxes, rpn_boxes_positive, tf.shape(nms_output), min_iou)
 
     # calculate pos and neg loss
     if weighted_loss or neg_pos_loss:
@@ -407,7 +412,7 @@ def normal_clustering_loss(nms_output: tf.Tensor, boxes: tf.Tensor, rpn_boxes_po
                            cluster_assignment: tf.Tensor, loss_object: tf.keras.losses.Loss,
                            positive_weight: float, standard: List[tf.keras.metrics.Metric], weighted_loss: bool = False,
                            neg_pos_loss: bool = False, use_pos_neg_loss: bool = False, norm_loss_weight: float = 1,
-                           add_regression_param: int = 0) -> Tuple[float, tf.Tensor]:
+                           add_regression_param: int = 0, min_iou: float = 0.18) -> Tuple[float, tf.Tensor]:
     """
     a combination between the normal and clustering loss
 
@@ -448,6 +453,8 @@ def normal_clustering_loss(nms_output: tf.Tensor, boxes: tf.Tensor, rpn_boxes_po
         0 -> lnms only predicts a single obj. score
         1 -> lnms also regresses the center of the boxes
         2 -> lnms regresses the full boxes
+    min_iou: float
+        minimum iou such that box is considered positive prediction
     # TODO add weighting for regression vs score loss
 
     Returns
@@ -459,7 +466,7 @@ def normal_clustering_loss(nms_output: tf.Tensor, boxes: tf.Tensor, rpn_boxes_po
     """
     scores = tf.expand_dims(nms_output[:, 0], axis=1)
     norm_loss, indexes = normal_loss(loss_object, boxes, rpn_boxes_positive, scores, positive_weight, standard,
-                                     weighted_loss, neg_pos_loss, use_pos_neg_loss)
+                                     weighted_loss, neg_pos_loss, use_pos_neg_loss, min_iou)
     clust_loss, _ = clustering_loss(nms_output, cluster_assignment, loss_object, positive_weight, standard, boxes,
                                     rpn_boxes_positive, weighted_loss, neg_pos_loss, add_regression_param)
 
