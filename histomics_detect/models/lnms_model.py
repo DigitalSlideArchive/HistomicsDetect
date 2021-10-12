@@ -106,7 +106,7 @@ class LearningNMS(tf.keras.Model, ABC):
         for i in range(self.num_hidden_layers):
             x = tf.keras.layers.Dense(self.final_hidden_layer_features, activation=self.activation, use_bias=True,
                                       name=f'final_after_block_layer_{i}')(x)
-        output_size = self.add_regression_param * 2+1
+        output_size = self.add_regression_param * 2 + 1 + int(self.objectness_format)
         x = tf.keras.layers.Dense(output_size, activation=self.final_activation, name="output_score_layer",
                                   use_bias=True)(x)
 
@@ -153,7 +153,7 @@ class LearningNMS(tf.keras.Model, ABC):
 
         final_input = tf.keras.Input(shape=self.block_hidden_layer_features, name=f'block_{block_id}_after_pool_input')
         output = tf.keras.Model(inputs=final_input,
-                                outputs=tf.keras.layers.Dense(self.feature_size*feature_size_multiplier + 1,
+                                outputs=tf.keras.layers.Dense(self.feature_size * feature_size_multiplier + 1,
                                                               activation='linear',
                                                               name=f'block_{block_id}_after_pool_layer', use_bias=True)(
                                     final_input),
@@ -183,7 +183,8 @@ class LearningNMS(tf.keras.Model, ABC):
 
         # calculate interpolated features
         if self.cross_boxes:
-            cross_boxes = cross_from_boxes(rpn_boxes, self.cross_scale, image_width=self.width, image_height=self.height)
+            cross_boxes = cross_from_boxes(rpn_boxes, self.cross_scale, image_width=self.width,
+                                           image_height=self.height)
             interpolated = roialign(features, tf.reshape(cross_boxes, (-1, 4)), self.field,
                                     pool=self.roialign_pool, tiles=self.roialign_tiles)
             interpolated = reduction_func(interpolated, axis=1)
@@ -200,7 +201,8 @@ class LearningNMS(tf.keras.Model, ABC):
             # TODO maybe concatenate instead of mean for cross
         else:
             if self.expand_boxes:
-                rpn_boxes = tf.concat([rpn_boxes[:, :2]-self.box_expand_value, rpn_boxes[:, 2:]+self.box_expand_value*2])
+                rpn_boxes = tf.concat(
+                    [rpn_boxes[:, :2] - self.box_expand_value, rpn_boxes[:, 2:] + self.box_expand_value * 2])
                 rpn_boxes = clip_boxes(rpn_boxes, self.width, self.height)
             interpolated = roialign(features, rpn_boxes, self.field,
                                     pool=self.roialign_pool, tiles=self.roialign_tiles)
@@ -420,6 +422,8 @@ class LearningNMS(tf.keras.Model, ABC):
                                                   self.positive_weight, self.standard, self.weighted_loss,
                                                   self.neg_pos_loss, self.use_pos_neg_loss, self.norm_loss_weight,
                                                   self.add_regression_param)
+        elif self.loss_type == 'custom':
+            loss, labels = self.custom_loss(self, nms_output, boxes, rpn_boxes)
         else:
             scores = tf.expand_dims(nms_output[:, 0], axis=1)
             loss, labels = normal_loss(self.loss_object, boxes, rpn_boxes, scores, self.positive_weight,
