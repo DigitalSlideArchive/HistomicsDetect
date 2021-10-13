@@ -65,11 +65,11 @@ class LearningNMS(tf.keras.Model, ABC):
             loss_col = tf.keras.metrics.Mean(name='loss')
             loss_pos = tf.keras.metrics.Mean(name='pos_loss')
             loss_neg = tf.keras.metrics.Mean(name='neg_loss')
-            tp = tf.keras.metrics.Mean(name='tp')
-            fp = tf.keras.metrics.Mean(name='fp')
-            tn = tf.keras.metrics.Mean(name='tn')
-            fn = tf.keras.metrics.Mean(name='fn')
-            self.standard = [loss_col, loss_pos, loss_neg, tp, fp, tn, fn]
+            # tp = tf.keras.metrics.Mean(name='tp')
+            # fp = tf.keras.metrics.Mean(name='fp')
+            # tn = tf.keras.metrics.Mean(name='tn')
+            # fn = tf.keras.metrics.Mean(name='fn')
+            self.standard = [loss_col, loss_pos, loss_neg]  # , tp, fp, tn, fn
 
     def _initialize_init_regression(self) -> tf.keras.Model:
         feature_size_multiplier = 2 if self.combine_box_and_cross else 1
@@ -325,9 +325,10 @@ class LearningNMS(tf.keras.Model, ABC):
         if not self.interpolated_gradient:
             # calculate interpolated features
             interpolated = self._interpolate_features(compressed_features, rpn_boxes)
-            interpolated = tf.concat([scores, interpolated], axis=1)
+            interpolated_score = tf.concat([scores, interpolated], axis=1)
 
         if self.use_reg:
+            # TODO does not work fix or remove
             rpn_reg_label = parameterize(rpn_boxes, boxes)
 
         # training step
@@ -339,17 +340,21 @@ class LearningNMS(tf.keras.Model, ABC):
             if self.interpolated_gradient:
                 # calculate interpolated features
                 interpolated = self._interpolate_features(compressed_features, rpn_boxes)
-                interpolated = tf.concat([scores, interpolated], axis=1)
+                interpolated_score = tf.concat([scores, interpolated], axis=1)
 
             if self.use_reg:
-                init_regression_input = tf.concat([interpolated, rpn_boxes], axis=1)
+                init_regression_input = tf.concat([interpolated_score, rpn_boxes], axis=1)
                 init_regression_output = self.init_regression(init_regression_input)
 
                 rpn_boxes = unparameterize(init_regression_output, rpn_boxes)
                 rpn_reg_loss = self.loss[1](rpn_reg_label, init_regression_output)
 
+            if self.manipulate_rpn:
+                rpn_boxes, scores = self.maipulate_rpn_func(self, rpn_boxes, boxes, interpolated, scores)
+                interpolated_score = tf.concat([scores, interpolated], axis=1)
+
             # run network
-            nms_output = self.net((interpolated, rpn_boxes), training=True)
+            nms_output = self.net((interpolated_score, rpn_boxes), training=True)
 
             loss, labels = self._calculate_loss(nms_output, boxes, rpn_boxes)
 
