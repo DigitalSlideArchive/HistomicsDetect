@@ -58,11 +58,11 @@ def plot_evaluation(rgb, boxes, regressions, tp_list, fp_list, fn_list):
         N x 4 tensor where each row contains the x,y location of the upper left
         corner of each regressed box and its width and height in that order.
     tp_list: tensor
-        A 1-d tensor of indices of true positives in regressions as produced by
-        the function greedy_iou.
+        A 2-d tensor containing indices of true positive predictions in regressions
+        in the first column and the corresponding indices of matched ground truth 
+        in boxes.
     fp_list: tensor
-        A 1-d tensor of indices of false positives in regressions as produced by
-        the function greedy_iou.
+        A 1-d tensor of indices of false positive predictions in regressions.
     fn_list: tensor
         A 1-d tensor of indices of false negatives in regressions as produced by
         the function greedy_iou.
@@ -73,6 +73,6 @@ def plot_evaluation(rgb, boxes, regressions, tp_list, fp_list, fn_list):
     """    
     
     plt.imshow(rgb)
-    _plot_boxes(tf.gather(regressions, tp_list, axis=0), 'g')
+    _plot_boxes(tf.gather(regressions, tp_list[:,0], axis=0), 'g')
     _plot_boxes(tf.gather(regressions, fp_list, axis=0), 'r')
     _plot_boxes(tf.gather(boxes, fn_list, axis=0), 'b')
