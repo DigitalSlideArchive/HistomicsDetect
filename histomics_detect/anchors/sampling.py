@@ -1,6 +1,7 @@
 import tensorflow as tf
 
 
+@tf.function
 def sample_anchors(positive, negative, max_n=256, min_ratio=0.5):
     """Sample to balance the proportion of positive and negative anchors used in 
     training.
@@ -49,7 +50,8 @@ def sample_anchors(positive, negative, max_n=256, min_ratio=0.5):
 
     return positive, negative
   
-  
+
+@tf.function
 def _sample_no_replacement(maxval, size):
     """Generates indices to sample from a tensor without replacement.
     
