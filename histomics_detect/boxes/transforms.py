@@ -1,6 +1,7 @@
 import tensorflow as tf
 
 
+@tf.function
 def parameterize(positive, boxes):
     """Transforms boxes that are matched to an anchor to a parameterized format
     used by the regression loss.
@@ -36,6 +37,7 @@ def parameterize(positive, boxes):
     return parameterized
 
 
+@tf.function
 def unparameterize(parameterized, positive):
     """Transforms parameterized boxes to an un-parameterized [x,y,w,h] format.
     
@@ -73,6 +75,7 @@ def unparameterize(parameterized, positive):
     return boxes
   
 
+@tf.function
 def tf_box_transform(boxes):
     """Transform bounding boxes to TF format.
     
@@ -101,6 +104,7 @@ def tf_box_transform(boxes):
     return transformed
     
 
+@tf.function
 def clip_boxes(boxes, width, height):
     """Clips boxes that extend beyond a region of interest boundary.
     
@@ -143,6 +147,7 @@ def clip_boxes(boxes, width, height):
     return clipped
 
 
+@tf.function
 def _unstack_box_array(boxes):
     """Unstacks the x,y,w,h bounding box parameters from the stacked input.
     
@@ -179,6 +184,7 @@ def _unstack_box_array(boxes):
     return x, y, w, h
 
 
+@tf.function
 def filter_edge_boxes(boxes, width: float, height: float, margin: float = 5.0):
     """
     Filters out boxes that cross the margin of the image boundary.
