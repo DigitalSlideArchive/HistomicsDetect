@@ -9,6 +9,7 @@ from histomics_detect.roialign.roialign import roialign
 import tensorflow as tf
 
 
+@tf.function
 def map_outputs(output, anchors, anchor_px, field):
     """Transforms region-proposal network outputs from 3D tensors to 2D anchor arrays.
     
