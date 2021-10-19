@@ -25,7 +25,7 @@ def plot_inference(rgb: tf.Tensor, boxes: tf.Tensor, nms_output: tf.Tensor, rpn_
     ----------
     rgb: array
         Image for display with imshow.
-    boxes tensor (float32)
+    boxes: tensor (float32)
         ground truth boxes
         shape: G x 4
     nms_output: tensor (float32)
@@ -65,7 +65,7 @@ def plot_inference(rgb: tf.Tensor, boxes: tf.Tensor, nms_output: tf.Tensor, rpn_
     rpn_boxes = tf.squeeze(tf.gather(rpn_boxes, tf.where(condition)))
 
     if filter_edge:
-        boxes = filter_edge_boxes(boxes, tf.shape(rgb)[1], tf.shape(rgb)[0], filter_margin)
+        boxes, _ = filter_edge_boxes(boxes, tf.shape(rgb)[1], tf.shape(rgb)[0], filter_margin)
 
     try:
         ious = iou(rpn_boxes, boxes)
@@ -77,10 +77,10 @@ def plot_inference(rgb: tf.Tensor, boxes: tf.Tensor, nms_output: tf.Tensor, rpn_
         negative_boxes = tf.reshape(tf.gather(boxes, fn_list), (-1, 4))
 
         if filter_edge:
-            negative_boxes = filter_edge_boxes(negative_boxes, tf.shape(rgb)[1], tf.shape(rgb)[0], filter_margin)
+            negative_boxes, _ = filter_edge_boxes(negative_boxes, tf.shape(rgb)[1], tf.shape(rgb)[0], filter_margin)
 
-            positive_pred = filter_edge_boxes(positive_pred, tf.shape(rgb)[1], tf.shape(rgb)[0], filter_margin)
-            negative_pred = filter_edge_boxes(negative_pred, tf.shape(rgb)[1], tf.shape(rgb)[0], filter_margin)
+            positive_pred, _ = filter_edge_boxes(positive_pred, tf.shape(rgb)[1], tf.shape(rgb)[0], filter_margin)
+            negative_pred, _ = filter_edge_boxes(negative_pred, tf.shape(rgb)[1], tf.shape(rgb)[0], filter_margin)
 
     except:
         positive_pred = tf.constant([])
