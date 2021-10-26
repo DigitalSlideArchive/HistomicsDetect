@@ -153,11 +153,13 @@ def greedy_iou_mapping(ious, min_iou):
     fn: int32
         False negative count of IoU mapping.
     tp_list: int32
-        Indices of true positives in 'iou' tensor (matched rows).
+        Two-dimensional tensor containing indices of true positive predictions
+        in first column, and corresponding matching ground truth indices in second
+        column.
     fp_list: int32
-        Indices of false positives in 'iou' tensor (unmatched rows).
+        One-dimensional tensor containing indices of false positive predictions.
     fn_list: int32
-        Indices of false negatives in 'iou' tensor (unmached columns).
+        One-dimensional tensor containing indices of false negative ground truth.
     """
 
     #initialize masks
