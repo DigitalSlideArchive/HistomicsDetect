@@ -56,7 +56,7 @@ class LearningNMS(tf.keras.Model, ABC):
             self.net = BlockModel([self._initialize_block(i) for i in range(self.num_blocks)],
                                   self._initialize_final_output(), threshold=self.threshold,
                                   train_tile=self.train_tile, use_image_features=self.use_image_features,
-                                  use_distance=self.use_distance)
+                                  use_distance=self.use_distance, original_lnms=self.original_lnms)
 
             if self.use_reg:
                 self.init_regression = self._initialize_init_regression()

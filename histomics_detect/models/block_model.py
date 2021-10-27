@@ -8,7 +8,7 @@ from histomics_detect.boxes.neighborhood import all_neighborhoods_additional_inf
 class BlockModel(tf.keras.Model, ABC):
     def __init__(self, blocks: List[Tuple[tf.keras.Model, tf.keras.Model]], final_layers: tf.keras.Model,
                  threshold: float = 0.5, train_tile: float = 224, use_image_features: bool = True,
-                 use_distance: bool = False):
+                 use_distance: bool = False, original_lnms: bool = True):
         """
         Learning-NMS block model
 
@@ -28,6 +28,8 @@ class BlockModel(tf.keras.Model, ABC):
             true use image features when creating prediction representation
         use_distance: bool
             assemble neighborhood with distance instead of iou
+        original_lnms: bool
+            reuse the learned representation for next block
         """
         super(BlockModel, self).__init__(name='block_model')
         self.blocks = blocks
@@ -85,7 +87,7 @@ class BlockModel(tf.keras.Model, ABC):
             # run network on block
 
             # assemble neighborhood
-            if self.use_image_features:
+            if self.use_image_features or self.original_lnms:
                 # assemble the neighboring prediction representation for each neighborhood
                 neighborhood = tf.reshape(tf.gather(interpolated, neighborhoods_indexes),
                                           [-1, tf.shape(interpolated)[1]])
