@@ -84,24 +84,22 @@ class BlockModel(tf.keras.Model, ABC):
         for block, output in self.blocks:
             # run network on block
 
-            # assemble the neighboring prediction representation for each neighborhood
-            neighborhood = tf.reshape(tf.gather(interpolated, neighborhoods_indexes),
-                                      [-1, tf.shape(interpolated)[1]])
-            # assemble the tiled prediction representation of the main prediction of each neighborhood
-            main_predictions = tf.reshape(tf.gather(interpolated, self_indexes), [-1, tf.shape(interpolated)[1]])
-            neighborhoods = tf.concat([neighborhood, main_predictions, neighborhoods_add_info], axis=1)
-
             # assemble neighborhood
-            # if self.use_image_features:
-            #
-            # else:
-            #     neighborhood = tf.reshape(tf.gather(interpolated[:, 0], neighborhoods_indexes),
-            #                               [-1, 1])
-            #     main_predictions = tf.reshape(tf.gather(interpolated[:, 0], self_indexes),
-            #                                   [-1, 1])
-            #     empty_features = tf.zeros((tf.shape(neighborhoods_add_info)[0], tf.shape(interpolated)[1] - 1))
-            #     neighborhoods = tf.concat(
-            #         [neighborhood, empty_features, main_predictions, empty_features, neighborhoods_add_info], axis=1)
+            if self.use_image_features:
+                # assemble the neighboring prediction representation for each neighborhood
+                neighborhood = tf.reshape(tf.gather(interpolated, neighborhoods_indexes),
+                                          [-1, tf.shape(interpolated)[1]])
+                # assemble the tiled prediction representation of the main prediction of each neighborhood
+                main_predictions = tf.reshape(tf.gather(interpolated, self_indexes), [-1, tf.shape(interpolated)[1]])
+                neighborhoods = tf.concat([neighborhood, main_predictions, neighborhoods_add_info], axis=1)
+            else:
+                neighborhood = tf.reshape(tf.gather(interpolated[:, 0], neighborhoods_indexes),
+                                          [-1, 1])
+                main_predictions = tf.reshape(tf.gather(interpolated[:, 0], self_indexes),
+                                              [-1, 1])
+                empty_features = tf.zeros((tf.shape(neighborhoods_add_info)[0], tf.shape(interpolated)[1] - 1))
+                neighborhoods = tf.concat(
+                    [neighborhood, empty_features, main_predictions, empty_features, neighborhoods_add_info], axis=1)
             num_predictions = tf.size(neighborhood_sizes)
 
             # run block
