@@ -79,7 +79,7 @@ class BlockModel(tf.keras.Model, ABC):
             all_neighborhoods_additional_info(rpn_boxes_positive, prediction_ids, self.train_tile, self.threshold,
                                               self.use_distance)
 
-        if not self.use_image_features:
+        if not self.use_image_features and not self.original_lnms:
             empty_features = tf.zeros((tf.shape(interpolated)[0], tf.shape(interpolated)[1] - 1))
             interpolated = tf.concat([tf.expand_dims(interpolated[:, 0], axis=1), empty_features], axis=1)
 
