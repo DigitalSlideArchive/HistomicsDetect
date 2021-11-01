@@ -115,6 +115,30 @@ def plot_inference(rgb: tf.Tensor, boxes: tf.Tensor, nms_output: tf.Tensor, rpn_
 
 
 def _run_model(data, model):
+    """
+    runs the lnms model
+
+    Parameters
+    ----------
+    data:
+        model input
+    model:
+        network
+
+    Returns
+    -------
+    rgb: array
+        Image for display with imshow.
+    boxes: tensor (float32)
+        ground truth boxes
+        shape: G x 4
+    rpn_boxes: tensor
+        N x 4 tensor where each row contains the x,y location of the upper left
+        corner of each regressed box and its width and height in that order.
+    nms_output2: tensor (float32)
+        objectiveness scores corresponding to the predicted boxes after lnms processing
+        shape: N x 1
+    """
     rgb, boxes, _ = data
     print(_)
 
@@ -135,6 +159,22 @@ def _run_model(data, model):
 
 
 def _plot_boxes_multi_plot(boxes, color, ax):
+    """
+    plots boxes on specific ax
+
+    Parameters
+    ----------
+    boxes:
+        boxes to plot
+    color:
+        box color
+    ax:
+        axis to plot boxes on or plt
+
+    Returns
+    -------
+
+    """
     x, y, w, h = tf.split(boxes, 4, axis=1)
     for i, (xi, yi, wi, hi) in enumerate(zip(x, y, w, h)):
         ax.plot([xi, xi + wi, xi + wi, xi, xi],
@@ -148,7 +188,36 @@ def run_plot(validation_data, model: tf.keras.Model, index: int = 0, save_fig: b
              pred_colors: Tuple[str, str] = ('g', 'r'), pred_size: int = 300, print_prediction_numbers: bool = True,
              show_axis: bool = True) -> None:
     """
-    runs the given model and plots the inference
+    runs model ond plots the inference
+
+    Parameters
+    ----------
+    save_fig: bool
+        true if picture should be saved
+    fig_path: str
+        path to save figure at
+    filter_edge: bool
+        true -> filters boxes and predictions too close to the border of image
+    filter_margin: int
+        min distance to border not to be filtered out
+    threshold: float
+    print_prediction_numbers: bool
+        true -> print statistic of tp, fp, fn
+    figsize: Tuple[int, int]
+        dimensions of figure
+    gt_colors: Tuple[str, str]
+        color of predicted ground truth, color of not predicted ground truth (false negative)
+    pred_colors: Tuple[str, str]
+        color of true positive prediction, color of false positive prediction
+    pred_size: int
+        size of dot symbolizing a prediction
+    show_axis: bool
+    validation_data
+    model: tf.keras.Model
+        lnms model to run
+    index: int
+        index of validation image that should be run and plotted
+
     Returns
     -------
 
@@ -162,10 +231,36 @@ def run_plot(validation_data, model: tf.keras.Model, index: int = 0, save_fig: b
                    figsize, gt_colors, pred_colors, pred_size, print_prediction_numbers, show_axis)
 
 
-def plot_multiple_outputs(configs: dict, validation_data: tf.data.Dataset, ds_train_roi: tf.data.Dataset,
-                          model_paths: List[str], variable: str, model_variations: List, index: int,
-                          faster_model: tf.keras.Model, callbacks: List[tf.keras.callbacks.Callback],
-                          titles: List[str], fig_path: str = 'figures/plot_of_inferences.png') -> None:
+def plot_multiple_outputs(configs: dict, validation_data: tf.data.Dataset, model_paths: List[str], variable: str,
+                          model_variations: List, index: int, faster_model: tf.keras.Model, titles: List[str],
+                          fig_path: str = 'figures/plot_of_inferences.png') -> None:
+    """
+    plots multiple outputs of lnms where one hyperparamter changes
+
+    Parameters
+    ----------
+    configs: dict
+        configurations as dictionary
+    validation_data:
+        validation dataset
+    model_paths:
+        list of paths to model weights
+    variable:
+        configs variable that changes
+    model_variations:
+        list of the values of the variable that changes
+    index:
+    faster_model:
+        faster r-cnn model with loaded weights
+    titles:
+        list of titles for each plot
+    fig_path:
+        save fig here
+
+    Returns
+    -------
+
+    """
     counter = 0
     for data in validation_data:
         if counter == index:

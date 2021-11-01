@@ -6,7 +6,7 @@ This package contains performance metrics implemented in tensorflow
 from .iou import iou
 from .iou import greedy_iou_mapping
 from .average_precision import AveragePrecision
-from .lnms import lnms_metrics
+from .lnms import tf_linear_sum_assignment
 
 # list out things that are available for public use
 __all__ = (
@@ -15,5 +15,5 @@ __all__ = (
     'iou',
     'greedy_iou_mapping',
     'AveragePrecision',
-    'lnms_metrics'
+    'tf_linear_sum_assignment'
 )
