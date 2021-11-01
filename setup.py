@@ -21,7 +21,9 @@ setuptools.setup(
       'numpy',
       'pandas',
       'Pillow',
-      'tensorflow-gpu>=2.4'
+      'tensorflow-gpu>=2.4',
+      'scipy',
+      'pyyaml'
     ],
     license='Apache Software License 2.0',
     keywords='histomics_detect',

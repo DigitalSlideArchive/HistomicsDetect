@@ -39,6 +39,7 @@ class BlockModel(tf.keras.Model, ABC):
         self.train_tile = train_tile
         self.use_image_features = use_image_features
         self.use_distance = use_distance
+        self.original_lnms = original_lnms
 
     def call(self, x: Tuple[tf.Tensor, tf.Tensor], training: bool = False, mask=None):
         """
