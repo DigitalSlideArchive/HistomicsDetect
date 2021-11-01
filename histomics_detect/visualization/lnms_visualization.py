@@ -233,6 +233,7 @@ def run_plot(validation_data, model: tf.keras.Model, index: int = 0, save_fig: b
 
         plot_inference(rgb, boxes, nms_output2, rpn_boxes, save_fig, fig_path, filter_edge, filter_margin, threshold,
                        figsize, gt_colors, pred_colors, pred_size, print_prediction_numbers, show_axis)
+        break
 
 
 def plot_multiple_outputs(configs: dict, validation_data: tf.data.Dataset, model_paths: List[str], variable: str,
