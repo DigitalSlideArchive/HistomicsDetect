@@ -44,6 +44,7 @@ output_layer_features: 128
 anchor_size: 2048
 activation: relu
 final_activation: sigmoid
+original_lnms: False
 
 # training hyperparameter settings
 num_epochs: 10
@@ -124,6 +125,6 @@ special_configs:
   height: tf.constant(configs[\'train_tile\'], tf.int32)
 
   loss_object: tf.keras.losses.LogCosh()
-  custom_loss: labmda x: x
+  custom_loss: 'labmda x: x'
 
   feature_extractor: vgg16
