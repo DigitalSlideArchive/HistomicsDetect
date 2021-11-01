@@ -222,13 +222,17 @@ def run_plot(validation_data, model: tf.keras.Model, index: int = 0, save_fig: b
     -------
 
     """
-    validation_data = list(validation_data.as_numpy_iterator())
-    data = validation_data[index]
 
-    rgb, boxes, rpn_boxes, nms_output2 = _run_model(data, model)
+    counter = 0
+    for data in validation_data:
+        if counter < index:
+            counter += 1
+            continue
 
-    plot_inference(rgb, boxes, nms_output2, rpn_boxes, save_fig, fig_path, filter_edge, filter_margin, threshold,
-                   figsize, gt_colors, pred_colors, pred_size, print_prediction_numbers, show_axis)
+        rgb, boxes, rpn_boxes, nms_output2 = _run_model(data, model)
+
+        plot_inference(rgb, boxes, nms_output2, rpn_boxes, save_fig, fig_path, filter_edge, filter_margin, threshold,
+                       figsize, gt_colors, pred_colors, pred_size, print_prediction_numbers, show_axis)
 
 
 def plot_multiple_outputs(configs: dict, validation_data: tf.data.Dataset, model_paths: List[str], variable: str,
