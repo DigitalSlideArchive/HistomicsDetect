@@ -524,11 +524,11 @@ class FasterRCNN(tf.keras.Model):
         and aggregate metrics. Single-image metrics are printed to the stdout.
         """
         
-        #unpack image, boxes, and optional image name
-        if len(data) ==3:
-            rgb, boxes, name = data
+        #unpack image, boxes, class labels, and optional image name
+        if len(data) == 4:
+            rgb, boxes, labels, name = data
         else:
-            rgb, boxes = data
+            rgb, boxes, labels = data
             name = ''
 
         #convert boxes from RaggedTensor
@@ -596,11 +596,11 @@ class FasterRCNN(tf.keras.Model):
         calculated.
         """
     
-        #unpack image, boxes, and optional image name
-        if len(data) ==3:
-            rgb, boxes, name = data
+        #unpack image, boxes, class labels, and optional image name
+        if len(data) == 4:
+            rgb, boxes, labels, name = data
         else:
-            rgb, boxes = data
+            rgb, boxes, labels = data
 
         #convert boxes from RaggedTensor
         boxes = boxes.to_tensor()
