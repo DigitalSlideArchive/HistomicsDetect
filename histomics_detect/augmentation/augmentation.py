@@ -1,6 +1,7 @@
 import tensorflow as tf
 
 
+@tf.function
 def _box_crop(corner, length, window):
     """Applies a crop to a sequence of boxes to remove portions falling outside
     a defined region.
@@ -33,6 +34,7 @@ def _box_crop(corner, length, window):
     return corner_crop, length_crop
 
 
+@tf.function
 def flip(rgb, boxes):
     """Randomly flips an image and ground truth boxes along horizontal and/or 
     verical axis.
@@ -83,7 +85,8 @@ def flip(rgb, boxes):
     return rgb, boxes
 
 
-def crop(rgb, boxes, width, height, min_fraction=0.5):
+@tf.function
+def crop(rgb, boxes, width, height, labels=None, min_fraction=0.5):
     """Randomly crops a portion of the input image and ground truth boxes.
     
     This function is used for data augmentation and randomly crops a
@@ -96,16 +99,20 @@ def crop(rgb, boxes, width, height, min_fraction=0.5):
         
     Parameters
     ----------
-    rgb: tensor
+    rgb : tensor
         The 2D or 3D input image tensor.
-    boxes: tensor (float32)
+    boxes : tensor (float32)
         M x 4 tensor where each row contains the x,y location of the upper left
         corner of a ground truth box and its width and height in that order.
-    width: int32
+    labels : tensor (int)
+        An M-length tensor where each value defines the integer class label
+        of a ground truth box. Default value of None is for a network without
+        classification.
+    width : int32
         Width of the cropped output image.
-    height: int32
+    height : int32
         Height of the cropped output image.
-    min_fraction: float32
+    min_fraction : float32
         Threshold for percent of original area used to retain cropped boxes.
         
     Returns
@@ -124,7 +131,7 @@ def crop(rgb, boxes, width, height, min_fraction=0.5):
     height = tf.minimum(height, tf.shape(rgb)[0])
 
     #condense ragged tensor
-    [x, y, w, h] = tf.unstack(boxes.to_tensor(), axis=1)
+    [x, y, w, h] = tf.unstack(boxes.to_tensor(), num=4, axis=1)
 
     #identify candidate cells to include in cropped roi
     c_width = tf.less(w, tf.cast(width, tf.float32))
@@ -140,6 +147,10 @@ def crop(rgb, boxes, width, height, min_fraction=0.5):
     y = tf.gather(y, include)
     w = tf.gather(w, include)
     h = tf.gather(h, include)
+   
+    #mask candidate labels
+    if labels is not None:
+        labels = tf.gather(labels, include)
 
     #select box/cell at random
     selected = tf.random.uniform([1], 0, tf.size(x)-1, dtype=tf.int32)[0]
@@ -174,18 +185,23 @@ def crop(rgb, boxes, width, height, min_fraction=0.5):
     #calculate cropped box area, proportion of box in cropped region
     proportion = tf.divide(tf.multiply(wc, hc), tf.multiply(w, h))
 
-    #assign outputs
+    #assign box outputs
     mask = tf.greater_equal(proportion, min_fraction)
     x = tf.boolean_mask(x, mask)
     y = tf.boolean_mask(y, mask)
     w = tf.boolean_mask(wc, mask)
     h = tf.boolean_mask(hc, mask)
-
     boxes = tf.RaggedTensor.from_tensor(tf.stack((x,y,w,h), axis=1))
+    
+    #assign label outputs
+    if labels is not None:
+        labels = tf.boolean_mask(labels, mask)
+        return crop, boxes, labels
+    else:
+        return crop, boxes
 
-    return crop, boxes
   
-
+@tf.function
 def jitter(boxes, percent=0.05):
     """Randomly displaces bounding boxes using uniform noise proportional
     to a percentage of box dimensions.
@@ -226,6 +242,7 @@ def jitter(boxes, percent=0.05):
     return boxes
 
 
+@tf.function
 def shrink(boxes, percent=0.05):
     """Randomly resizes bounding boxes proportional to box dimensions.
     
