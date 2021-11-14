@@ -165,9 +165,9 @@ class FasterRCNN(tf.keras.Model):
         proposals.
     """
     
-    def __init__(self, rpnetwork, backbone, shape, anchor_px, classes=None,
+    def __init__(self, backbone, rpnetwork, frcnn_network, input_shape, classes=None, anchor_px, 
                  lmbda=10.0, pool=2, tiles=3, tau=0.5, nms_iou=0.3, map_iou=0.5, margin=32,
-                 objectness_metrics = [tf.keras.metrics.AUC(curve="PR", name='prauc'),
+                 objectness_metrics = [tf.keras.metrics.AUC(curve='PR', name='prauc'),
                                        tf.keras.metrics.Recall(name='tpr'),
                                        tf.keras.metrics.FalseNegatives(name='fn'),
                                        tf.keras.metrics.FalsePositives(name='fp')],
@@ -176,6 +176,64 @@ class FasterRCNN(tf.keras.Model):
                                        AveragePrecision(iou_thresh = 0.75, delta=0.1, name='ap75')],
                  classification_metrics = None,
                  **kwargs):
+        """
+        Initializes the model, capturing submodels (backbone, region-proposal, fast-rcnn) and 
+        parameters (input shape, class names, anchor sizes, loss-mixing weights, roi-align tiling
+        and pooling parameters, thresholds for objectness and non-max supression, and margin parameters
+        for clearing objects close to image boundaries during training and inference) as attributes.
+        
+        Parameters
+        ----------
+        backbone : tf.keras.Model
+            Feature generating network created by the /networks/backbones.
+        rpnetwork : tf.keras.Model
+            Region proposal generating network created by /networks/rpns.
+        frcnn_network : tf.keras.Model
+            Classification and regression generate network created by /networks/fast_rcnn.
+        input_shape : array_like
+            Shape of input images used in training.
+        classes : tensor (string)
+            A string tensor defining the class names and orders for integer labeling.
+        anchor_px : tensor (int32)
+            One dimensional tensor of anchor sizes.
+        lmbda : float32
+            Loss weight for balancing objectness and regression losses of region
+            proposal network. Default value 10.0.
+        pool : int32
+            RoiAlign parameter. pool^2 is the number of locations to interpolate 
+            features at within each tile. Default value 2.
+        tiles : int32
+            RoiAlign parameter. tile^2 is the number of tiles that each regressed 
+            bounding box is divided into. Default value 3.
+        tau : float32
+            Threshold in range [0,1] used to select region proposals based on 
+            region proposal network objectness scores. Default value 0.5.
+        nms_iou : float32
+            Intersection over union threshold used to remove redundant proposals
+            during non-max suppression. Range is (0, 1]. Default value 0.3.
+        map_iou : float32
+            Minimum intersection over union threshold between a proposal and ground
+            truth object to call that proposal a detection. Used in calculating
+            test performance statistics.
+        margin : int32
+            The margin value is used to clear ground truth objects and proposals
+            from the edges of test images. All objects intersecting partially or
+            wholly with this margin will be removed. Default value 32 pixels.
+        objectness_metrics : list (tf.keras.Metric)
+            A list of tf.keras.Metric objects that can assess the binary
+            classification performance of the objectness score from the region
+            proposal network. Defaults to precision-recall auc, true positive rate,
+            false negatives, and false positives.
+        regression_metrics : list (tf.keras.Metric)
+            A list of tf.keras.Metric objects that can assess the regression
+            performance region proposal network or RoiAlign refined regressions.
+            Defaults to average precision at 0.25, 0.50, and 0.75 iou thresholds
+            with an objectness threshold step size of 0.1.
+        classification_metrics : list (tf.keras.Metric)
+            A list of tf.keras.Metric objects to evaluate classification performance.
+            Defaults to None, but will be set to measure micro-AUC and macro-AUC if
+            classes parameter is provided.
+        """
     
         super(FasterRCNN, self).__init__()
 
