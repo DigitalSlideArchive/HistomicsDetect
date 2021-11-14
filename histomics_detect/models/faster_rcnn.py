@@ -725,7 +725,10 @@ class FasterRCNN(tf.keras.Model):
             rpn_boxes_positive, _ = filter_anchors(boxes, rpn_boxes)
             interpolated = roialign(features, rpn_boxes_positive, self.field, 
                                     pool=self.pool, tiles=self.tiles)
-            align_reg = self.fastrcnn(interpolated)
+            if self.classes is not None:
+                align_reg, labels = self.fastrcnn(interpolated)
+            else:
+                align_reg = self.fastrcnn(interpolated)
             
             #calculate fast r-cnn regression loss
             align_boxes = unparameterize(align_reg, rpn_boxes_positive)            
