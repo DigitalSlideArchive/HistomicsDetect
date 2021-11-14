@@ -165,7 +165,7 @@ class FasterRCNN(tf.keras.Model):
         proposals.
     """
     
-    def __init__(self, backbone, rpnetwork, frcnn_network, input_shape, classes=None, anchor_px, 
+    def __init__(self, backbone, rpnetwork, frcnnnetwork, input_shape, anchor_px, classes=None,
                  lmbda=10.0, pool=2, tiles=3, tau=0.5, nms_iou=0.3, map_iou=0.5, margin=32,
                  objectness_metrics = [tf.keras.metrics.AUC(curve='PR', name='prauc'),
                                        tf.keras.metrics.Recall(name='tpr'),
@@ -188,14 +188,14 @@ class FasterRCNN(tf.keras.Model):
             Feature generating network created by the /networks/backbones.
         rpnetwork : tf.keras.Model
             Region proposal generating network created by /networks/rpns.
-        frcnn_network : tf.keras.Model
+        frcnnnetwork : tf.keras.Model
             Classification and regression generate network created by /networks/fast_rcnn.
         input_shape : array_like
             Shape of input images used in training.
-        classes : tensor (string)
-            A string tensor defining the class names and orders for integer labeling.
         anchor_px : tensor (int32)
             One dimensional tensor of anchor sizes.
+        classes : tensor (string)
+            A string tensor defining the class names and orders for integer labeling.
         lmbda : float32
             Loss weight for balancing objectness and regression losses of region
             proposal network. Default value 10.0.
