@@ -3,7 +3,7 @@ from PIL import Image
 import tensorflow as tf
 
 
-def dataset(path, png_parser, csv_parser, size, cases):
+def dataset(path, png_parser, csv_parser, size, cases, classes=None):
     """Generates a tf.data.Dataset object containing matched region
     of interest .pngs and bounding box .csv files.
     
@@ -14,30 +14,36 @@ def dataset(path, png_parser, csv_parser, size, cases):
         
     Parameters
     ----------
-    path: string
+    path : string
         Path containing png region of interest images and csv files 
         containing corresponding bounding boxes.
-    png_parser: function
+    png_parser : function
         Function that accepts a single string containing the filename
         of a png image (without path) and that returns the corresponding
         case and roi name. The case and roi name should uniquely identify
         the roi within the dataset.
-    csv_parser: function
+    csv_parser : function
         Function that accepts a single string containing the filename
         of a png image (without path) and that returns the corresponding
         case and roi name. The case and roi name should uniquely identify
         the roi within the dataset.
-    cases: list of strings
+    cases : list of strings
         A list of cases used to select rois for inclusion in the 
         dataset.
+    classes : tensor
+        A string tensor defining the possible class names. Class labels will be
+        encoded based on the order they are encountered. Default value is None which
+        corresponds to a non-classification network and will produce class labels with
+        value zero.    
         
     Returns
     -------
-    ds: tf.data.Dataset
+    ds : tf.data.Dataset
         A dataset where each element contains an rgb image tensor, an N x 4
         tensor of bounding boxes where each row contains the x,y location 
         of the upper left corner of a ground truth box and its width and
-        height in that order, and the png filename.
+        height in that order, an N-length tensor of integer class labels, 
+        and the png filename.
     """
     
     #get list of csv and png files in path   
@@ -74,7 +80,7 @@ def dataset(path, png_parser, csv_parser, size, cases):
     ds = tf.data.Dataset.from_tensor_slices(matches)
     
     #map image and csv read operations to generate (rgb, boxes, pngfile) tuple
-    ds = ds.map(lambda x: (read_png(x[0]), read_csv(x[1]), x[0]))
+    ds = ds.map(lambda x: (read_png(x[0]), read_csv(x[1], classes), x[0]))
     
     return ds
 
@@ -101,10 +107,10 @@ def read_csv(csv_file, classes=None):
         
     Parameters
     ----------
-    csv_file: string
+    csv_file : string
         Path and filename of the csv file.
     classes : tensor
-        A string tensor containing the possible class names. Class labels will be
+        A string tensor defining the possible class names. Class labels will be
         encoded based on the order they are encountered. Default value is None which
         corresponds to a non-classification network and will produce class labels with
         value zero.
@@ -182,21 +188,21 @@ def resize(rgb, boxes, factor):
         
     Parameters
     ----------
-    rgb: tensor
+    rgb : tensor
         The image as a 2D or 3D tensor.
-    boxes: tensor (float32)
+    boxes : tensor (float32)
         N x 4 tensor containing boxes where each row contains the x,y 
         location of the upper left corner of a ground truth box and its width 
         and height in that order.
-    factor: float32
+    factor : float32
         The scalar factor used for resizing. A value of 2.0 will double the
         magnification.
         
     Returns
     -------
-    rgb: tensor
+    rgb : tensor
         The input image resized by factor.
-    boxes: tensor (float32)
+    boxes : tensor (float32)
         N x 4 tensor containing boxes resized by factor.
     """
     
