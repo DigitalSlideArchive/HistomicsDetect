@@ -79,7 +79,8 @@ def dataset(path, png_parser, csv_parser, size, cases):
     return ds
 
 
-def read_csv(csv_file):
+@tf.function
+def read_csv(csv_file, classes=None):
     """
     Reads a csv file describing bounding boxes using tensorflow operations.
     
@@ -96,19 +97,27 @@ def read_csv(csv_file):
         slide_x (float - optional) - horizontal upper-left corner of box in slide
         slide_y (float - optional) - vertical upper-left corner of box in slide
         type (string - optional) - the type of annotation, either 'box' or 'point'
-        contained (bool - optional) - if box or point is entirelycontained within roi
+        contained (bool - optional) - if box or point is entirely contained within roi
         
     Parameters
     ----------
     csv_file: string
         Path and filename of the csv file.
+    classes : tensor
+        A string tensor containing the possible class names. Class labels will be
+        encoded based on the order they are encountered. Default value is None which
+        corresponds to a non-classification network and will produce class labels with
+        value zero.
         
     Returns
     -------
-    ds: RaggedTensor
+    boxes : RaggedTensor
         A ragged tensor where the each row contains the x,y location 
         of the upper left corner of a ground truth box and its width and
         height in that order.
+    labels : tensor
+        An int64 tensor with the class labels coded by index. Defaults to zero
+        when no classes are provided.
     """
     
     #read contents of csv
@@ -125,8 +134,21 @@ def read_csv(csv_file):
     boxes = tf.RaggedTensor.from_tensor(tf.stack((lines[0], lines[1], 
                                                   lines[2], lines[3]), 
                                                  axis=1))
+    
+    #generate class output
+    if classes is not None:
+        
+        #match class strings to inputs
+        labels = tf.map_fn(lambda x: tf.where(tf.math.equal(classes, x)), 
+                           lines[4], fn_output_signature=tf.int64)
+        
+        #remove singleton dimensions
+        labels = tf.squeeze(labels)
 
-    return boxes
+    else:
+        labels = tf.zeros(tf.shape(lines[0]), tf.int64)
+        
+    return boxes, labels
 
 
 def read_png(png_file):
@@ -135,12 +157,12 @@ def read_png(png_file):
         
     Parameters
     ----------
-    png_file: string
+    png_file : string
         Path to the png file.
         
     Returns
     -------
-    rgb: tensor
+    rgb : tensor
         Three dimensional rgb image tensor.
     """
     
