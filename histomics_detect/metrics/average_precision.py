@@ -107,7 +107,7 @@ class AveragePrecision(tf.keras.metrics.Metric):
         return ap
 
 
-    def reset_states(self):
+    def reset_state(self):
         """
         Resets the true positive, false positive, and false negative states to zero.
         """
