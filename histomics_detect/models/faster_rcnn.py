@@ -616,11 +616,15 @@ class FasterRCNN(tf.keras.Model):
                                                         rpn_obj_positive, nms_iou)
         
         #generate roialign predictions for rpn positive predictions
-        align_boxes = self.align(rpn_boxes_nms, features, self.field, 
-                                 self.pool, self.tiles)
+        if self.classes is None:
+            align_boxes = self.align_classify(rpn_boxes_nms, features, self.field,
+                                              self.pool, self.tiles)
+            return align_boxes
+        else:
+            align_boxes, softmax = self.align_classify(rpn_boxes_nms, features, self.field,
+                                                       self.pool, self.tiles)
+            return align_boxes, softmax
         
-        return align_boxes
-
         
     @tf.function(experimental_relax_shapes=True)
     def test_step(self, data):
