@@ -144,8 +144,15 @@ def read_csv(csv_file, classes=None):
     #generate class output
     if classes is not None:
         
+        tf.print('\n')
+        tf.print(csv_file)
+        
+        for x in tf.range(tf.size(lines[4]), dtype=tf.int64):
+            tf.print(lines[4][x])
+            tf.print(tf.where(tf.math.equal(classes, lines[4][x])))        
+        
         #match class strings to inputs
-        labels = tf.map_fn(lambda x: tf.where(tf.math.equal(classes, x)), 
+        labels = tf.map_fn(lambda x: tf.where(tf.math.equal(classes, x))[0], 
                            lines[4], fn_output_signature=tf.int64)
         
         #remove singleton dimensions
