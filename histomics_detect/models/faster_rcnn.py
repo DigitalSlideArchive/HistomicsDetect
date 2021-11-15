@@ -479,11 +479,11 @@ class FasterRCNN(tf.keras.Model):
     
     
     @tf.function
-    def align(self, boxes, features, field, pool, tiles):
-        """Performs roialign on filtered inference results. If results are not filtered
-        using objectness thresholding or non-max suppression prior to this step an OOM 
-        error may occur. Helpful for refinement of post-processed inference results from 
-        raw.
+    def align_classify(self, boxes, features, field, pool, tiles):
+        """Performs roialign and classification on filtered inference results. If results 
+        are not filtered using objectness thresholding or non-max suppression prior to 
+        this step an OOM error may occur. Helpful for refinement of post-processed inference 
+        results from raw.
         
         Parameters
         ----------
@@ -513,10 +513,14 @@ class FasterRCNN(tf.keras.Model):
         interpolated = roialign(features, boxes, field, pool, tiles)
         
         #generate roialign predictions and transform to box representation
-        align_reg = self.fastrcnn(interpolated)
-        align_boxes = unparameterize(align_reg, boxes)
-        
-        return align_boxes
+        if self.classes is None:
+            align_reg = self.fastrcnn(interpolated)
+            align_boxes = unparameterize(align_reg, boxes)
+            return align_boxes
+        else:
+            align_reg, softmax = self.fastrcnn(interpolated)
+            align_boxes = unparameterize(align_reg, boxes)
+            return align_boxes, softmax
     
     
     @tf.function
