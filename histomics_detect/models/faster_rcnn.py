@@ -331,8 +331,34 @@ class FasterRCNN(tf.keras.Model):
             metric.update_state(boxes, predictions)
         
         return {m.name: m.result() for m in self.metrics}
+
     
+    def _update_classifier_metrics(self, labels, softmax):
+        """
+        Updates classifier metrics that are based on multiclass/categorical 
+        classification performance.
         
+        Parameters
+        ----------
+        labels: tensor
+            N x classes encodings of class ground truth. One-hot or label
+            smoothed values.
+        softmax: tensor (bool)
+            N x classes tensor containing softmax scores in rows.
+
+        Returns
+        -------
+        metrics: dict
+            Returns a dict of updated metric values keyed by metric names.       
+        """
+        
+        #update metrics values
+        for metric in self.classifier_metrics:
+            metric.update_state(labels, softmax)
+        
+        return {m.name: m.result() for m in self.classifier_metrics}
+    
+    
     def input_size(self, size=[None, None]):
         """
         Sets input size dimensions for the backbone and region proposal networks. 
