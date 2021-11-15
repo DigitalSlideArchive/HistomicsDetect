@@ -91,8 +91,8 @@ class FasterRCNN(tf.keras.Model):
         classification.
     field: float (integer-valued)
         The field size in pixels of the backbone network.
-    classes : array_like (string)
-        A string tensor defining the classes.
+    classes : tensor (string)
+        A string tensor defining the class names and orders for integer labeling.
     anchor_px: tensor (int32)
         One dimensional tensor of anchor sizes.
     lmbda: float32
@@ -128,7 +128,7 @@ class FasterRCNN(tf.keras.Model):
         performance region proposal network or RoiAlign refined regressions.
         Defaults to average precision at 0.25, 0.50, and 0.75 iou thresholds
         with an objectness threshold step size of 0.1.
-    classification_metrics: list (tf.keras.Metric)
+    classifier_metrics : list (tf.keras.Metric)
         A list of tf.keras.Metric objects to evaluate classification performance.
         Defaults to None, but will be set to measure micro-AUC and macro-AUC if
         classes parameter is provided.
@@ -155,8 +155,8 @@ class FasterRCNN(tf.keras.Model):
         and returns filtered proposed boxes and objectness scores.
     nms
         Applies non-max suppression to region proposals using objectness scores.
-    align
-        Applies RoiAlign to region proposals.
+    align_classify
+        Applies RoiAlign to region proposals and performs classification (if defined).
     raw
         Generates the full unfiltered outputs from the region proposal network
         inclding proposal regressions and their objectness scores.
@@ -174,7 +174,7 @@ class FasterRCNN(tf.keras.Model):
                  regression_metrics = [AveragePrecision(iou_thresh = 0.25, delta=0.1, name='ap25'),
                                        AveragePrecision(iou_thresh = 0.50, delta=0.1, name='ap50'),
                                        AveragePrecision(iou_thresh = 0.75, delta=0.1, name='ap75')],
-                 classification_metrics = None,
+                 classifier_metrics = None,
                  **kwargs):
         """
         Initializes the model, capturing submodels (backbone, region-proposal, fast-rcnn) and 
@@ -240,9 +240,9 @@ class FasterRCNN(tf.keras.Model):
         #add models to self
         self.rpnetwork = rpnetwork
         self.backbone = backbone
-        self.fastrcnn = fast_rcnn(backbone, tiles=tiles, pool=pool)
+        self.fastrcnn = frcnnnetwork
         
-        #copy classes to self
+        #capture class labels
         self.classes = classes
 
         #capture field, anchor sizes, loss mixing
@@ -267,17 +267,18 @@ class FasterRCNN(tf.keras.Model):
         self.map_iou = map_iou
         
         #generate anchors for training efficiency - works for fixed-size training
-        self.anchors = create_anchors(anchor_px, self.field, shape[0], shape[1])
+        self.anchors = create_anchors(anchor_px, self.field, input_shape[0], input_shape[1])
 
-        #define metrics
+        #define metrics for region proposal 
         self.objectness_metrics = objectness_metrics
         self.regression_metrics = regression_metrics
-
+        
         #define classification metrics if classes provided but metrics not provided
-        if classes is not None and classification_metrics is None:
-            self.classification_metrics = [tf.keras.metrics.AUC(curve='ROC', name='micro'),
-                                           tf.keras.metrics.AUC(curve='ROC', multi_label=True,
-                                                                num_labels=len(classes))]
+        if classes is not None and classifier_metrics is None:
+            self.classifier_metrics = [tf.keras.metrics.AUC(curve='ROC', name='micro_AUC'),
+                                       tf.keras.metrics.AUC(curve='ROC', name='macro_AUC',
+                                                            multi_label=True,
+                                                            num_labels=len(classes))]
         
 
     def _update_objectness_metrics(self, objectness, positive):
