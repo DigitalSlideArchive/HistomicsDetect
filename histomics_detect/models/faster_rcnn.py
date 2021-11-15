@@ -706,8 +706,6 @@ class FasterRCNN(tf.keras.Model):
         if self.classes is not None:
             labels = tf.gather(labels, tp_list[:,1])
             filtered_softmax = tf.gather(filtered_softmax, tp_list[:,0])
-            tf.print(tf.shape(tf.one_hot(labels, tf.size(self.classes))))
-            tf.print(tf.shape(filtered_softmax))
             class_metrics = self._update_classifier_metrics(tf.one_hot(labels, 
                                                                        tf.size(self.classes)),
                                                             filtered_softmax)
