@@ -728,7 +728,7 @@ class FasterRCNN(tf.keras.Model):
         if len(data) == 4:
             rgb, boxes, labels, name = data
         else:
-            rgb, boxes, labels = data
+            rgb, boxes, classes = data
 
         #convert boxes from RaggedTensor
         boxes = boxes.to_tensor()
@@ -765,13 +765,13 @@ class FasterRCNN(tf.keras.Model):
             rpn_reg_label = parameterize(positive_anchors, boxes)
 
             #calculate objectness and regression labels
-            rpn_obj_loss = self.loss[0](tf.concat([rpn_obj_positive,
-                                                   rpn_obj_negative], axis=0),
-                                        tf.one_hot(rpn_obj_labels, 2))
+            rpn_obj_loss = self.loss[0](tf.one_hot(rpn_obj_labels, 2),
+                                        tf.concat([rpn_obj_positive,
+                                                   rpn_obj_negative], axis=0))
             rpn_reg_loss = self.loss[1](rpn_reg_label, rpn_reg)
 
             #weighted sum of objectness and regression losses
-            rpn_total_loss = rpn_obj_loss / 256 + \
+            rpn_total_loss = rpn_obj_loss / 256.0 + \
                 rpn_reg_loss * self.lmbda / tf.cast(tf.shape(self.anchors)[0], tf.float32)
             
             #fast r-cnn regression of rpn regressions from positive anchors
@@ -780,39 +780,57 @@ class FasterRCNN(tf.keras.Model):
             interpolated = roialign(features, rpn_boxes_positive, self.field, 
                                     pool=self.pool, tiles=self.tiles)
             if self.classes is not None:
-                align_reg, labels = self.fastrcnn(interpolated)
+                align_reg, softmax = self.fastrcnn(interpolated)
             else:
                 align_reg = self.fastrcnn(interpolated)
             
             #calculate fast r-cnn regression loss
-            align_boxes = unparameterize(align_reg, rpn_boxes_positive)            
             align_reg_label = parameterize(rpn_boxes_positive, boxes)
             align_reg_loss = self.loss[1](align_reg_label, align_reg)
+            
+            #calculate classification loss
+            if self.classes is not None:
+                labels = tf.gather(labels, tf.cast(rpn_boxes_positive[:,4], tf.int32))
+                classifier_loss = self.loss[2](tf.one_hot(labels, tf.size(self.classes)),
+                                               softmax)
 
-        #calculate backbone gradients and optimize
+        #calculate backbone gradients from rpn losses and optimize
         gradients = tape.gradient(rpn_total_loss, self.backbone.trainable_weights)
         self.optimizer.apply_gradients(zip(gradients, self.backbone.trainable_weights))
 
-        #calculate rpn gradients and optimize
+        #calculate rpn gradients from rpn losses and optimize
         gradients = tape.gradient(rpn_total_loss, self.rpnetwork.trainable_weights)  
         self.optimizer.apply_gradients(zip(gradients, self.rpnetwork.trainable_weights))
             
         #calculate roialign gradients and optimize
-        gradients = tape.gradient(align_reg_loss, self.fastrcnn.trainable_weights)  
+        gradients = tape.gradient(align_reg_loss, self.fastrcnn.trainable_weights)
         self.optimizer.apply_gradients(zip(gradients, self.fastrcnn.trainable_weights))
-    
-        #ious for rpn, roialign
-        align_ious = iou(align_boxes, boxes)
-        align_ious = tf.reduce_max(align_ious, axis=1)
-
-        #update metrics
+        
+        #calculate classification gradients and optimize
+        if self.classes is not None:
+            gradients = tape.gradient(classifier_loss, self.fastrcnn.trainable_weights)
+            self.optimizer.apply_gradients(zip(gradients, self.fastrcnn.trainable_weights))
+            gradients = tape.gradient(classifier_loss, self.backbone.trainable_weights)
+            self.optimizer.apply_gradients(zip(gradients, self.backbone.trainable_weights))
+        
+        #update objectness metrics - skip regression metrics for training (slow)
         metrics = self._update_objectness_metrics(tf.concat([rpn_obj_positive,
-                                                             rpn_obj_negative], 
-                                                            axis=0),
-                                                  rpn_obj_labels)
-
-        #build output loss dict
+                                                             rpn_obj_negative],
+                                                            axis=0), rpn_obj_labels)
+        
+        #build output loss dictionary
         losses = {'loss_rpn_obj': rpn_obj_loss, 'loss_rpn_reg': rpn_reg_loss,
                   'loss_align_reg': align_reg_loss}
+        
+        #calculate classification metrics
+        if self.classes is not None:
+            classifier_metrics = self._update_classifier_metrics(tf.one_hot(labels,
+                                                                            tf.size(self.classes)),
+                                                                 softmax)
+            #combine metrics
+            metrics = {**metrics, **classifier_metrics}
+                    
+            #add classifier losses to output loss dict
+            losses['loss_classifier'] = classifier_loss
 
         return {**losses, **metrics}
