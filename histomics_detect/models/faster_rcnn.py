@@ -637,7 +637,7 @@ class FasterRCNN(tf.keras.Model):
         if len(data) == 4:
             rgb, boxes, labels, name = data
         else:
-            rgb, boxes, labels = data
+            rgb, boxes = data
             name = ''
 
         #convert boxes from RaggedTensor
@@ -654,15 +654,22 @@ class FasterRCNN(tf.keras.Model):
                                                         rpn_obj_positive, self.nms_iou)
         
         #generate roialign predictions for rpn positive predictions
-        align_boxes_nms = self.align(rpn_boxes_nms, features, self.field, self.pool, self.tiles)
+        if self.classes is None:
+            align_boxes_nms = self.align_classify(rpn_boxes_nms, features, self.field, 
+                                                  self.pool, self.tiles)
+        else:
+            align_boxes_nms, softmax = self.align_classify(rpn_boxes_nms, features, self.field,
+                                                           self.pool, self.tiles)
         
         #clear margin of ground truth boxes
         boxes, _ = filter_edge_boxes(boxes, tf.shape(rgb)[1], tf.shape(rgb)[0], self.margin)     
         
-        #filter edge boxes
+        #filter objectness scores, RoiAlign boxes, and class predictions at edges
         filtered, mask = filter_edge_boxes(align_boxes_nms, tf.shape(rgb)[1], 
                                                  tf.shape(rgb)[0], self.margin)
         filtered_objectness = tf.boolean_mask(rpn_obj_nms, mask, axis=0)
+        if self.classes is not None:
+            filtered_softmax = tf.boolean_mask(softmax, mask, axis=0)
         
         #calculate ious
         align_ious = iou(filtered, boxes)
@@ -688,12 +695,24 @@ class FasterRCNN(tf.keras.Model):
                                                       tf.concat([filtered_objectness,
                                                                  filtered],
                                                                 axis=1))
-        
+
         #combine metrics
         metrics = {**obj_metrics, **reg_metrics}
         
         #dummy losses
-        losses = {'loss_rpn_obj': 0., 'loss_rpn_reg': 0., 'loss_align_reg': 0.}        
+        losses = {'loss_rpn_obj': 0., 'loss_rpn_reg': 0., 'loss_align_reg': 0.}    
+    
+        #update classification metrics and outputs
+        if self.classes is not None:
+            labels = tf.gather(labels, tp_list[:,1])
+            filtered_softmax = tf.gather(filtered_softmax, tp_list[:,0])
+            tf.print(tf.shape(tf.one_hot(labels, tf.size(self.classes))))
+            tf.print(tf.shape(filtered_softmax))
+            class_metrics = self._update_classifier_metrics(tf.one_hot(labels, 
+                                                                       tf.size(self.classes)),
+                                                            filtered_softmax)
+            metrics = {**metrics, **class_metrics}
+            losses['loss_classifier'] = 0
         
         return {**losses, **metrics}
     
