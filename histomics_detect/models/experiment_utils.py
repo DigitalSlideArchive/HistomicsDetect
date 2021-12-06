@@ -97,10 +97,6 @@ def validate_model(ds_validation_roi: tf.data.Dataset, model: LearningNMS, faste
         json.dump(log, file)
 
 
-def run_experiment():
-    pass
-
-
 def run_experiments(ds_train_roi, ds_validation_roi, callbacks: List[tf.keras.callbacks.Callback], configs: dict,
                     faster_model: tf.keras.Model, optimizer: tf.keras.optimizers.Optimizer,
                     changing_variable: str, values: List[Union[str, tf.keras.losses.Loss, int, float, tf.Tensor]],

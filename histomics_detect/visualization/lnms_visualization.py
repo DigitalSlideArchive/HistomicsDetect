@@ -291,7 +291,6 @@ def plot_multiple_outputs(configs: dict, validation_data: tf.data.Dataset, model
     for i, (path, model_variation) in enumerate(zip(model_paths, model_variations)):
         ax = axs[i + 1]
         ax.title.set_text(titles[i])
-        #         ax.plot([0, 0], [0, tf.shape(rgb)[0]], color = 'black')
 
         copied_config = configs.copy()
         copied_config[variable] = model_variation
@@ -299,9 +298,6 @@ def plot_multiple_outputs(configs: dict, validation_data: tf.data.Dataset, model
         model = LearningNMS(configs, faster_model.rpnetwork, faster_model.backbone, compression_net.compression_layers,
                             [configs['width'], configs['height']], )
         model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=1e-4))
-
-        #         history_callback = model.fit(x=ds_train_roi, batch_size=1, epochs=1, verbose=1,
-        #                                      callbacks=callbacks, steps_per_epoch=1)
 
         model.load_weights(path)
 
