@@ -623,10 +623,11 @@ class FasterRCNN(tf.keras.Model):
             output = self.rpnetwork(features, training=True)
 
             #transform outputs to 2D arrays with anchors in rows
-            rpn_obj_positive = tf.nn.softmax(map_outputs(output[0], positive_anchors, 
-                                                     self.anchor_px, self.field))
-            rpn_obj_negative = tf.nn.softmax(map_outputs(output[0], negative_anchors, 
-                                                     self.anchor_px, self.field))
+            softmax = tf.keras.layers.Softmax()
+            rpn_obj_positive = softmax(map_outputs(output[0], positive_anchors,
+                                                   self.anchor_px, self.field))
+            rpn_obj_negative = softmax(map_outputs(output[0], negative_anchors,
+                                                   self.anchor_px, self.field))
             rpn_reg = map_outputs(output[1], positive_anchors, self.anchor_px,
                                   self.field)
 
