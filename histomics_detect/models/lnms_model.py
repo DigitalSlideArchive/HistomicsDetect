@@ -6,11 +6,8 @@ from histomics_detect.networks.field_size import field_size
 from histomics_detect.anchors.create import create_anchors
 from histomics_detect.models.block_model import BlockModel
 from histomics_detect.roialign.roialign import roialign
-from histomics_detect.models.faster_rcnn import map_outputs
 from histomics_detect.boxes.transforms import unparameterize, parameterize, clip_boxes
 from histomics_detect.models.lnms_loss import normal_loss, clustering_loss, paper_loss, xor_loss, normal_clustering_loss
-# from histomics_detect.metrics.lnms import lnms_metrics
-from histomics_detect.models.model_utils import extract_data
 from histomics_detect.boxes.match import cluster_assignment
 from histomics_detect.boxes.cross_boxes import cross_from_boxes
 
@@ -65,11 +62,7 @@ class LearningNMS(tf.keras.Model, ABC):
             loss_col = tf.keras.metrics.Mean(name='loss')
             loss_pos = tf.keras.metrics.Mean(name='pos_loss')
             loss_neg = tf.keras.metrics.Mean(name='neg_loss')
-            # tp = tf.keras.metrics.Mean(name='tp')
-            # fp = tf.keras.metrics.Mean(name='fp')
-            # tn = tf.keras.metrics.Mean(name='tn')
-            # fn = tf.keras.metrics.Mean(name='fn')
-            self.standard = [loss_col, loss_pos, loss_neg]  # , tp, fp, tn, fn
+            self.standard = [loss_col, loss_pos, loss_neg]
 
     def _initialize_init_regression(self) -> tf.keras.Model:
         feature_size_multiplier = 2 if self.combine_box_and_cross else 1
@@ -213,52 +206,8 @@ class LearningNMS(tf.keras.Model, ABC):
 
         return interpolated
 
-    def extract_boxes_n_scores(self, norm: tf.Tensor):
-        """
-        extracts rpn_boxes and corresponding objectiveness scores with the faster r-cnn network
-
-        Parameters
-        ----------
-        norm: tensor (float32)
-            normalized image
-
-        - N: number of predictions
-        - d: feature dimensions
-
-        Returns
-        -------
-        features: tensor (float32)
-            shape: N x d
-            features extracted from the image for each box
-        rpn_boxes: tensor (float32)
-            shape: N x 4
-            each prediction in box form
-        scores: tensor (float32)
-            shape: N x 1
-            objectiveness score for each prediction
-        """
-        # extract features and rpn boxes from image
-        features = self.backbone(norm, training=False)
-        outputs = self.rpnetwork(features, training=False)
-
-        rpn_reg = map_outputs(outputs[1], self.anchors, self.anchor_px, self.field)
-        rpn_boxes = unparameterize(rpn_reg, self.anchors)
-
-        # get objectiveness scores
-        rpn_obj = tf.nn.softmax(map_outputs(outputs[0], self.anchors, self.anchor_px, self.field))
-        scores = rpn_obj[:, 1] / (tf.reduce_sum(rpn_obj, axis=1))
-
-        # filter out negative predictions
-        condition = tf.where(tf.greater(scores, self.initial_prediction_threshold))
-        rpn_boxes = tf.gather_nd(rpn_boxes, condition)
-        scores = tf.expand_dims(tf.gather_nd(scores, condition), axis=1)
-
-        return features, rpn_boxes, scores
-
     def call(self, data, training=None, mask=None):
-        norm, boxes, sample_weight = extract_data(data)
-
-        features, rpn_boxes, scores = self.extract_boxes_n_scores(norm)
+        features, boxes, rpn_boxes, scores = data
 
         compressed_features = self.compression_net(features, training=False)
 
@@ -269,55 +218,31 @@ class LearningNMS(tf.keras.Model, ABC):
         nms_output = self.net((interpolated, rpn_boxes), training=True)
         return features, rpn_boxes, scores, nms_output
 
-    def test_step(self, data):
-        norm, boxes, sample_weight = extract_data(data)
-
-        features, rpn_boxes, scores = self.extract_boxes_n_scores(norm)
-
-        compressed_features = self.compression_net(features, training=False)
-
-        interpolated = self._interpolate_features(compressed_features, rpn_boxes)
-        interpolated = tf.concat([scores, interpolated], axis=1)
-        # run network
-        nms_output = self.net((interpolated, rpn_boxes), training=True)
-
-        loss, _ = self._calculate_loss(nms_output, boxes, rpn_boxes)
-
-        self._cal_update_performance_stats(boxes, rpn_boxes, nms_output)
-
-        metrics = {m.name: m.result() for m in self.standard}
-        losses = {'val_loss': loss}
-
-        return {**losses, **metrics}
-
-    def _cal_update_performance_stats(self, boxes, rpn_boxes, nms_output):
-        # scores = tf.expand_dims(nms_output[:, 0], axis=1)
-        # tp, tn, fp, fn = lnms_metrics(boxes, rpn_boxes, scores)
-        # self.standard[3].update_state(tp/tf.shape(rpn_boxes)[0])
-        # self.standard[4].update_state(fp/tf.shape(rpn_boxes)[0])
-        # self.standard[5].update_state(tn/tf.shape(rpn_boxes)[0])
-        # self.standard[6].update_state(fn/tf.shape(rpn_boxes)[0])
-        pass
-
     def train_step(self, data):
-        norm, boxes, sample_weight = extract_data(data)
+        """
+        training function
 
-        # extract features and rpn boxes from image
-        features, rpn_boxes, scores = self.extract_boxes_n_scores(norm)
+        Parameters
+        ----------
+        data: Tuple[features, boxes, rpn_boxes, scores]
+            - features: tensor (float32)
+                shape: W x H x M
+                features extracted from the image
+            - boxes: tensor (float32)
+                shape: N x 4
+                ground truth boxes
+            - rpn_boxes: tensor (float32)
+                shape: G x 4
+                region proposal boxes
+            - scores:
+                shape: G x 1
+                objectness scores
 
-        if self.distributed_training:
-            self._train_function(features, boxes, rpn_boxes, scores)
-        else:
-            loss = tf.cond(tf.shape(rpn_boxes)[0] > 0, lambda: self._train_function(features, boxes, rpn_boxes, scores),
-                           lambda: 0.0)
-
-        # save loss and metrics
-        losses = {'lnms_loss': loss}
-        metrics = {m.name: m.result() for m in self.standard}
-
-        return {**losses, **metrics}
-
-    def _train_function(self, features, boxes, rpn_boxes, scores):
+        Returns
+        -------
+        losses, metrics
+        """
+        features, boxes, rpn_boxes, scores = data
 
         if not self.compressed_gradient:
             compressed_features = self.compression_net(features, training=False)
@@ -374,7 +299,11 @@ class LearningNMS(tf.keras.Model, ABC):
         if self.calculate_train_metrics:
             self._cal_update_performance_stats(boxes, rpn_boxes, nms_output)
 
-        return loss
+        # save loss and metrics
+        losses = {'lnms_loss': loss}
+        metrics = {m.name: m.result() for m in self.standard}
+
+        return {**losses, **metrics}
 
     def _calculate_loss(self, nms_output, boxes, rpn_boxes) -> Tuple[float, tf.Tensor]:
         """
