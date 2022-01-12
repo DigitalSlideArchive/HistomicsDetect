@@ -43,7 +43,7 @@ def pretrained(name, train_shape=(224, 224, 3)):
     return model, preprocessor
 
 
-def residual(model, blocks, stride=None, preprocessor=tf.keras.applications.resnet.preprocess_input):
+def residual(model, preprocessor, blocks, stride=None):
     """Creates a feature extraction backbone from a tf.keras.applications resnet model.
     Allows user to select the number of residual blocks to keep and to set the convolution
     stride. Optionally merges the model with a preprocessor function.
@@ -51,15 +51,14 @@ def residual(model, blocks, stride=None, preprocessor=tf.keras.applications.resn
     Parameters
     ----------
     model : tf.keras.Model
-        A resnet keras Model obtained from tf.keras.applications.
+        A resnet keras Model obtained from tf.keras.applications. Can be loaded using 'pretrained()'.
+    preprocesor : function
+        Function used to transform input images. Can be loaded using 'pretrained()'.
     blocks : int
         The desired number of residual blocks to keep from the input model. Terminal blocks
         > blocks are truncated from the output model.
     stride : int
         The desired stride for the first convolution. Default value None does not alter stride.
-    preprocesor : function
-        Function used to transform input images. Default value
-        tf.keras.applications.resnet.preprocess_input.
     
     Returns
     -------
