@@ -2,8 +2,29 @@ from histomics_detect.networks.transfer_layers import transfer_layers
 import tensorflow as tf
 
 
-def residual_backbone(model, stride, blocks, shape=(None, None, 3)):
-    #builds backbone feature extraction network for region-proposal network
+def residual(model, blocks, stride=None, preprocessor=tf.keras.applications.resnet.preprocess_input):
+    """Creates a feature extraction backbone from a tf.keras.applications resnet model.
+    Allows user to select the number of residual blocks to keep and to set the convolution
+    stride. Optionally merges the model with a preprocessor function.
+        
+    Parameters
+    ----------
+    model : tf.keras.Model
+        A resnet keras Model obtained from tf.keras.applications.
+    blocks : int
+        The desired number of residual blocks to keep from the input model. Terminal blocks
+        > blocks are truncated from the output model.
+    stride : int
+        The desired stride for the first convolution. Default value None does not alter stride.
+    preprocesor : function
+        Function used to transform input images. Default value
+        tf.keras.applications.resnet.preprocess_input.
+    
+    Returns
+    -------
+    backbone : tf.keras.Model
+        A keras model with desired number of blocks, stride, and preprocessing capability.
+    """
 
     #sweep layers to identify activation layer of the block 'blocks'
     add = False
@@ -26,17 +47,18 @@ def residual_backbone(model, stride, blocks, shape=(None, None, 3)):
                 add = False
 
     #replace input layer
-    input = tf.keras.Input(shape=shape)
+    input = tf.keras.Input(shape=(None, None, 3))
 
     #duplicate zero padding layer (layer 1)
     padding = tf.keras.layers.serialize(model.layers[1])
     padding = tf.keras.layers.deserialize(padding)
 
     #modify stride of first convolutional layer (layer 2)
-    conv = tf.keras.layers.serialize(model.layers[2])
-    weights = model.layers[2].get_weights()
-    conv['config']['strides'] = (stride, stride)
-    conv = tf.keras.layers.deserialize(conv)
+    if stride is not None:
+        conv = tf.keras.layers.serialize(model.layers[2])
+        weights = model.layers[2].get_weights()
+        conv['config']['strides'] = (stride, stride)
+        conv = tf.keras.layers.deserialize(conv)
 
     #re-build additional feature extraction layers
     features = transfer_layers(model.layers[3:terminal+1],
