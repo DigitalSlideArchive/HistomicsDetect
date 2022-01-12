@@ -1,4 +1,3 @@
-from histomics_detect.networks.backbones import residual_backbone
 import tensorflow as tf
 
 
