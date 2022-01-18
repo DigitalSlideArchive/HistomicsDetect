@@ -118,17 +118,25 @@ def residual(model, preprocessor, blocks, stride=None):
     padding = tf.keras.layers.deserialize(padding)
 
     #modify stride of first convolutional layer (layer 2)
-    conv = tf.keras.layers.serialize(model.layers[2])
-    if stride is None:
-        stride = conv['config']['strides'][0]    
     weights = model.layers[2].get_weights()
+    name = model.layers[2].name
+    if stride is None:
+        stride = model.layers[2].strides
+    conv = tf.keras.layers.serialize(model.layers[2])
     conv['config']['strides'] = (stride, stride)
     conv = tf.keras.layers.deserialize(conv)
+    
+    #apply preprocessor
+    normalized = preprocessor(input)
 
-    #compose model and set weights for first convolution
+    #compose model
     features = transfer_layers(model.layers[3:terminal+1],
-                                   'b', conv(padding(input)))    
+                                   'b', conv(padding(normalized)))   
     backbone = tf.keras.Model(inputs=input, outputs=features)
-    backbone.layers[2].set_weights(weights)
+    
+    #set weights for first convolution
+    for (i, layer) in enumerate(backbone.layers):
+        if layer.name == name:
+            backbone.layers[i].set_weights(weights)
 
     return backbone
