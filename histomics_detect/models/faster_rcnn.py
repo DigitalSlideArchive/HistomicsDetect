@@ -163,14 +163,11 @@ class FasterRCNN(tf.keras.Model):
     """
     
     def __init__(self, backbone_name, backbone_args, rpn_args, frcnn_args, train_args,
-                 anchor_sizes, tau=0.5, nms_iou=0.3, map_iou=0.5, margin=32,
+                 validation_args, anchor_sizes,
                  objectness_metrics = [tf.keras.metrics.AUC(curve="PR", name='prauc'),
                                        tf.keras.metrics.Recall(name='tpr'),
                                        tf.keras.metrics.FalseNegatives(name='fn'),
                                        tf.keras.metrics.FalsePositives(name='fp')],
-                 regression_metrics = [AveragePrecision(iou_thresh = 0.25, delta=0.1, name='ap25'),
-                                       AveragePrecision(iou_thresh = 0.50, delta=0.1, name='ap50'),
-                                       AveragePrecision(iou_thresh = 0.75, delta=0.1, name='ap75')],
                  **kwargs):
     
         super(FasterRCNN, self).__init__(**kwargs)
@@ -181,11 +178,8 @@ class FasterRCNN(tf.keras.Model):
         self.rpn_args = rpn_args
         self.frcnn_args = frcnn_args
         self.train_args = train_args
+        self.validation_args = validation_args
         self.anchor_sizes = anchor_sizes #sizes of anchors at each receptive field
-        self.tau = tau  #objectness threshold for calling positives during validation
-        self.nms_iou = nms_iou #iou threshold for applying nms during validation
-        self.map_iou = map_iou #iou threshold for greedy mapping during validation
-        self.margin = margin #margin for clearing boxes and predictions near image edge during validation
         
         #build backbone, rpn, and terminal network
         backbone, preprocessor = pretrained(backbone_name, train_args['train_shape'])
@@ -208,13 +202,23 @@ class FasterRCNN(tf.keras.Model):
         self.max_anchors = train_args['max_anchors'] #max negative anchors to sample
         self.np_ratio = train_args['np_ratio'] #max acceptable ratio of negative : positive anchors
         
+        #capture validation arguments
+        self.tau = validation_args['tau']
+        self.nms_iou = validation_args['nms_iou']
+        self.tpr_iou = validation_args['tpr_iou']
+        self.margin = validation_args['margin']
+        
         #generate anchors for training efficiency - works for fixed-size training
-        self.anchors = create_anchors(self.anchor_px, self.field, train_args['train_shape'][0], 
+        self.anchors = create_anchors(self.anchor_px, self.field, 
+                                      train_args['train_shape'][0], 
                                       train_args['train_shape'][1])
 
         #define metrics
         self.objectness_metrics = objectness_metrics
-        self.regression_metrics = regression_metrics
+        self.regression_metrics = [AveragePrecision(iou_thresh = t, 
+                                                    delta=validation_args['ap_delta'],
+                                                    name='ap' + str(int(100*t)))
+                                   for t in validation_args['ap_ious']]
 
 
     def get_config(self):
@@ -223,11 +227,8 @@ class FasterRCNN(tf.keras.Model):
                 'rpn_args': self.rpn_args,
                 'frcnn_args': self.frcnn_args,
                 'train_args': self.train_args,
-                'anchor_sizes': self.anchor_sizes,
-                'tau': self.tau,
-                'nms_iou': self.nms_iou,
-                'map_iou': self.map_iou,
-                'margin': self.margin}
+                'validation_args': self.validation_args,
+                'anchor_sizes': self.anchor_sizes}
     
     
     @classmethod
@@ -585,7 +586,7 @@ class FasterRCNN(tf.keras.Model):
         align_ious = iou(filtered, boxes)
         
         #greedy iou mapping for precision-recall auc
-        tp, fp, fn, tp_list, fp_list, fn_list = greedy_iou_mapping(align_ious, self.map_iou)
+        tp, fp, fn, tp_list, fp_list, fn_list = greedy_iou_mapping(align_ious, self.tpr_iou)
         
         #update console
         tf.print(name)
@@ -598,7 +599,7 @@ class FasterRCNN(tf.keras.Model):
         
         #update objectness binary classification metrics
         obj_metrics = self._update_objectness_metrics(filtered_objectness,
-                                                      tf.greater_equal(align_ious, self.map_iou))
+                                                      tf.greater_equal(align_ious, self.tpr_iou))
         
         #update regression metrics
         reg_metrics = self._update_regression_metrics(boxes,
