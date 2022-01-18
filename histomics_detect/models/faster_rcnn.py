@@ -84,6 +84,16 @@ class FasterRCNN(tf.keras.Model):
     
     Attributes
     ----------
+    backbone_args: array-like (dict)
+        Arguments used to construct model backbone.
+    rpn_args: array-like (dict)
+        Arguments used to construct region-proposal network.
+    frcnn_args: array-like (dict)
+        Arguments used to construct fast-rcnn network.
+    train_args: array-like (dict)
+        Arguments used to specify training behavior.
+    validation_args: array-like (dict)
+        Arguments used to specify validation behavior.
     backbone: tf.keras.Model
         A fully-convolutional backbone model that produces an M x N x D feature map.
     rpnetwork: tf.keras.Model
@@ -92,26 +102,30 @@ class FasterRCNN(tf.keras.Model):
         A fully-connected model that operates on roialigned outputs to produce
         refined regressions. Future enhancements will extend this network to perform
         classification.
-    field: float (integer-valued)
-        The field size in pixels of the backbone network.
     anchor_px: tensor (int32)
         One dimensional tensor of anchor sizes.
-    lmbda: float32
-        Loss weight for balancing objectness and regression losses of region
-        proposal network. Default value 10.0.
+    field: float (integer-valued)
+        The field size in pixels of the backbone network.
     pool: int32
         RoiAlign parameter. pool^2 is the number of locations to interpolate 
         features at within each tile. Default value 2.
     tiles: int32
         RoiAlign parameter. tile^2 is the number of tiles that each regressed 
         bounding box is divided into. Default value 3.
+    lmbda: float32
+        Loss weight for balancing objectness and regression losses of region
+        proposal network. Default value 10.0.
+    max_anchors: int32
+        Maximum number of total anchors to sample. Default value 256.
+    np_ratio: float32
+        Will sample at most negative : positive ratio anchors. Default value 2.0.
     tau: float32
         Threshold in range [0,1] used to select region proposals based on 
         region proposal network objectness scores. Default value 0.5.
     nms_iou: float32
         Intersection over union threshold used to remove redundant proposals
         during non-max suppression. Range is (0, 1]. Default value 0.3.
-    map_iou: float32
+    tpr_iou: float32
         Minimum intersection over union threshold between a proposal and ground
         truth object to call that proposal a detection. Used in calculating
         test performance statistics.
@@ -138,12 +152,10 @@ class FasterRCNN(tf.keras.Model):
     call
         Produces roialigned, non-max suppressed, and objectness thresholded
         predictions given 
-    contructor
-        Combines backbone and region proposal networks and accepts training 
-        parameters for RoiAlign and image shape, and testing parameters for
-        objectness thresholding, clearing ground truth or predicted objects at
-        image margins, for non-max suppression, and for calculating average
-        precision metrics.
+    constructor
+        Initializes model, constructing all networks and capturing all parameters
+        needed for training and validation. Captures all data necessary to 
+        produce configs needed for saving as a keras model.
     input_size
         Used to set or reset input image size dimensions. Useful during training
         and tiled inference.
@@ -177,7 +189,6 @@ class FasterRCNN(tf.keras.Model):
         self.frcnn_args = frcnn_args
         self.train_args = train_args
         self.validation_args = validation_args
-        self.anchor_sizes = anchor_sizes #sizes of anchors at each receptive field
         
         #build backbone, rpn, and terminal network
         backbone, preprocessor = pretrained(backbone_args['name'], train_args['train_shape'])
