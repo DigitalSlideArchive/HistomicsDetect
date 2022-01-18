@@ -23,10 +23,10 @@ def pretrained(name, train_shape=(224, 224, 3)):
     """
     
     if str.lower(name) == 'resnet50':
-        model = tf.keras.applications.resnet50.ResNet50(
+        model = tf.keras.applications.resnet.ResNet50(
             include_top=False, weights='imagenet', input_tensor=None,
             input_shape=train_shape, pooling=None)
-        preprocessor = tf.keras.applications.resnet50.preprocess_input
+        preprocessor = tf.keras.applications.resnet.preprocess_input
     elif str.lower(name) == 'resnet101':
         model = tf.keras.applications.resnet.ResNet101(
             include_top=False, weights='imagenet', input_tensor=None,
@@ -37,6 +37,22 @@ def pretrained(name, train_shape=(224, 224, 3)):
             include_top=False, weights='imagenet', input_tensor=None,
             input_shape=train_shape, pooling=None)
         preprocessor = tf.keras.applications.resnet.preprocess_input
+    elif str.lower(name) == 'resnet50v2':
+        model = tf.keras.applications.resnet_v2.ResNet50V2(
+            include_top=False, weights='imagenet', input_tensor=None,
+            input_shape=train_shape, pooling=None)
+        preprocessor = tf.keras.applications.resnet_v2.preprocess_input
+    elif str.lower(name) == 'resnet101v2':
+        model = tf.keras.applications.resnet_v2.ResNet101V2(
+            include_top=False, weights='imagenet', input_tensor=None,
+            input_shape=train_shape, pooling=None)
+        preprocessor = tf.keras.applications.resnet_v2.preprocess_input
+    elif str.lower(name) == 'resnet152v2':
+        model = tf.keras.applications.resnet_v2.ResNet152V2(
+            include_top=False, weights='imagenet', input_tensor=None,
+            input_shape=train_shape, pooling=None)
+        preprocessor = tf.keras.applications.resnet_v2.preprocess_input
+        
     else:
         raise ValueError("Network name not recognized")
     
@@ -44,7 +60,8 @@ def pretrained(name, train_shape=(224, 224, 3)):
 
 
 def residual(model, preprocessor, blocks, stride=None):
-    """Creates a feature extraction backbone from a tf.keras.applications resnet model.
+    """
+    Creates a feature extraction backbone from a tf.keras.applications resnet model.
     Allows user to select the number of residual blocks to keep and to set the convolution
     stride. Optionally merges the model with a preprocessor function.
         
@@ -76,12 +93,19 @@ def residual(model, preprocessor, blocks, stride=None):
             add = True
             continue
 
-        #look for activation layer following add layer
+        #look for activation or batch norm layer following add layer
         if add:
-            if type(layer) == tf.keras.layers.Activation:
-                block = block+1
+            if (type(layer) == tf.keras.layers.Activation): #resnet v1 - keep activation
+                block = block + 1
+                add = False
                 if block == blocks:
                     terminal = i
+                    break
+            elif (type(layer) == tf.keras.layers.BatchNormalization): #resnet v2 - keep add
+                block = block + 1
+                add = False
+                if block == blocks:
+                    terminal = i-1
                     break
             else:
                 add = False
@@ -94,17 +118,16 @@ def residual(model, preprocessor, blocks, stride=None):
     padding = tf.keras.layers.deserialize(padding)
 
     #modify stride of first convolutional layer (layer 2)
-    if stride is not None:
-        conv = tf.keras.layers.serialize(model.layers[2])
-        weights = model.layers[2].get_weights()
-        conv['config']['strides'] = (stride, stride)
-        conv = tf.keras.layers.deserialize(conv)
+    conv = tf.keras.layers.serialize(model.layers[2])
+    if stride is None:
+        stride = conv['config']['strides'][0]    
+    weights = model.layers[2].get_weights()
+    conv['config']['strides'] = (stride, stride)
+    conv = tf.keras.layers.deserialize(conv)
 
-    #re-build additional feature extraction layers
+    #compose model and set weights for first convolution
     features = transfer_layers(model.layers[3:terminal+1],
-                               'b', conv(padding(input)))
-
-    #set weights for first convolution
+                                   'b', conv(padding(input)))    
     backbone = tf.keras.Model(inputs=input, outputs=features)
     backbone.layers[2].set_weights(weights)
 
