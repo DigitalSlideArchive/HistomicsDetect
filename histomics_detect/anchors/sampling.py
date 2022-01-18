@@ -2,11 +2,11 @@ import tensorflow as tf
 
 
 @tf.function
-def sample_anchors(positive, negative, max_n=256, min_ratio=0.5):
+def sample_anchors(positive, negative, max_anchors=256, np_ratio=2.0):
     """Sample to balance the proportion of positive and negative anchors used in 
     training.
     
-    Samples up to max_n anchors with a minimum positive : negative ratio from the
+    Samples up to max_n anchors with a maximum negative : positive ratio from the
     dense anchors in the image space.
         
     Parameters
@@ -21,10 +21,10 @@ def sample_anchors(positive, negative, max_n=256, min_ratio=0.5):
         any ground truth object. Each row contains the x,y center location of the
         anchor in pixel units relative in the image coordinate frame, and the
         anchor width and height.
-    max_n: int32
-        Maximum number of total anchors to sample. 
-    min_ratio: float32
-        Will sample at most positive anchors / min_ratio total anchors.
+    max_anchors: int32
+        Maximum number of total anchors to sample. Default value 256.
+    np_ratio: float32
+        Will sample at most negative : positive ratio anchors. Default value 2.0.
         
     Returns
     -------
@@ -32,22 +32,24 @@ def sample_anchors(positive, negative, max_n=256, min_ratio=0.5):
         m x 4 tensor of positions of positive sampled anchors, where m <= M.
     negative: tensor (float32)
         n x 4 tensor of positions of negative sampled anchors, where n <= N and
-        n + m <= max_n and m/n >= min_ratio.
+        n + m <= max_anchors and n : m < np_ratio.
     """
 
-    #sample positive anchors
-    npos = tf.minimum(tf.shape(positive)[0], tf.cast(max_n/2, tf.int32))
-    indices = _sample_no_replacement(tf.shape(positive)[0]-1, npos)
-    positive = tf.gather(positive, indices)
-
-    #sample negative anchors
-    limit = tf.cast(tf.round(tf.cast(npos, tf.float32)/min_ratio), tf.int32)
-    nneg = tf.minimum(tf.shape(negative)[0],
-                      tf.minimum(limit, tf.cast(max_n/2, tf.int32)))
+    #calculate negative anchor limit if positive anchors abundant
+    neg_lim = max_anchors - tf.cast(tf.cast(max_anchors / (1 + np_ratio), tf.float32), tf.int32)
+    nneg = tf.minimum(tf.cast(tf.cast(tf.shape(positive)[0], tf.float32) * np_ratio, tf.int32),
+                      neg_lim)
     nneg = tf.maximum(nneg, 1)
+    
+    #sample positive anchors
+    npos = tf.minimum(tf.shape(positive)[0], max_anchors-nneg)
+    indices = _sample_no_replacement(tf.shape(positive)[0]-1, npos)
+    positive = tf.gather(positive, indices)    
+    
+    #sample negative anchors
     indices = _sample_no_replacement(tf.shape(negative)[0]-1, nneg)
     negative = tf.gather(negative, indices)
-
+    
     return positive, negative
   
 
