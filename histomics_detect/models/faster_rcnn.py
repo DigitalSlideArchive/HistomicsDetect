@@ -162,8 +162,8 @@ class FasterRCNN(tf.keras.Model):
         proposals.
     """
     
-    def __init__(self, backbone_name, backbone_args, rpn_args, frcnn_args, anchor_sizes, 
-                 lmbda=10.0, tau=0.5, nms_iou=0.3, map_iou=0.5, margin=32,
+    def __init__(self, backbone_name, backbone_args, rpn_args, frcnn_args, train_args,
+                 anchor_sizes, tau=0.5, nms_iou=0.3, map_iou=0.5, margin=32,
                  objectness_metrics = [tf.keras.metrics.AUC(curve="PR", name='prauc'),
                                        tf.keras.metrics.Recall(name='tpr'),
                                        tf.keras.metrics.FalseNegatives(name='fn'),
@@ -180,15 +180,15 @@ class FasterRCNN(tf.keras.Model):
         self.backbone_args = backbone_args
         self.rpn_args = rpn_args
         self.frcnn_args = frcnn_args
+        self.train_args = train_args
         self.anchor_sizes = anchor_sizes #sizes of anchors at each receptive field
-        self.lmbda = lmbda #loss mixing weights
         self.tau = tau  #objectness threshold for calling positives during validation
         self.nms_iou = nms_iou #iou threshold for applying nms during validation
         self.map_iou = map_iou #iou threshold for greedy mapping during validation
         self.margin = margin #margin for clearing boxes and predictions near image edge during validation
         
         #build backbone, rpn, and terminal network
-        backbone, preprocessor = pretrained(backbone_name, backbone_args['train_shape'])
+        backbone, preprocessor = pretrained(backbone_name, train_args['train_shape'])
         self.backbone = residual(backbone, preprocessor, backbone_args['blocks'], backbone_args['stride'])
         self.rpnetwork = rpn(backbone.output.shape[-1], len(anchor_sizes), **rpn_args)
         self.fastrcnn = fast_rcnn(backbone.output.shape[-1], **frcnn_args)        
@@ -203,9 +203,14 @@ class FasterRCNN(tf.keras.Model):
         #convert anchor_size to tensor
         self.anchor_px = tf.constant(anchor_sizes, dtype=tf.int32)
         
+        #capture training arguments
+        self.lmbda = train_args['lmbda'] #loss mixing weights
+        self.max_anchors = train_args['max_anchors'] #max negative anchors to sample
+        self.np_ratio = train_args['np_ratio'] #max acceptable ratio of negative : positive anchors
+        
         #generate anchors for training efficiency - works for fixed-size training
-        self.anchors = create_anchors(self.anchor_px, self.field, backbone_args['train_shape'][0], 
-                                      backbone_args['train_shape'][1])
+        self.anchors = create_anchors(self.anchor_px, self.field, train_args['train_shape'][0], 
+                                      train_args['train_shape'][1])
 
         #define metrics
         self.objectness_metrics = objectness_metrics
@@ -217,8 +222,8 @@ class FasterRCNN(tf.keras.Model):
                 'backbone_args': self.backbone_args,
                 'rpn_args': self.rpn_args,
                 'frcnn_args': self.frcnn_args,
+                'train_args': self.train_args,
                 'anchor_sizes': self.anchor_sizes,
-                'lmbda': self.lmbda,
                 'tau': self.tau,
                 'nms_iou': self.nms_iou,
                 'map_iou': self.map_iou,
@@ -631,7 +636,8 @@ class FasterRCNN(tf.keras.Model):
 
         #filter and sample anchors
         positive_anchors, negative_anchors = filter_anchors(boxes, self.anchors)
-        positive_anchors, negative_anchors = sample_anchors(positive_anchors, negative_anchors)
+        positive_anchors, negative_anchors = sample_anchors(positive_anchors, negative_anchors, 
+                                                            self.max_anchors, self.np_ratio)
 
         #training step
         with tf.GradientTape(persistent=True) as tape:
