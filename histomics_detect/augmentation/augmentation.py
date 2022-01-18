@@ -1,6 +1,7 @@
 import tensorflow as tf
 
 
+@tf.function
 def _box_crop(corner, length, window):
     """Applies a crop to a sequence of boxes to remove portions falling outside
     a defined region.
@@ -33,6 +34,7 @@ def _box_crop(corner, length, window):
     return corner_crop, length_crop
 
 
+@tf.function
 def flip(rgb, boxes):
     """Randomly flips an image and ground truth boxes along horizontal and/or 
     verical axis.
@@ -59,7 +61,7 @@ def flip(rgb, boxes):
     """
 
     #condense ragged tensor
-    [x, y, w, h] = tf.unstack(boxes.to_tensor(), axis=1)
+    [x, y, w, h] = tf.unstack(boxes.to_tensor(), num=4, axis=1)
 
     if tf.random.uniform([1])[0] > 0.5:
     
@@ -83,6 +85,7 @@ def flip(rgb, boxes):
     return rgb, boxes
 
 
+@tf.function
 def crop(rgb, boxes, width, height, min_fraction=0.5):
     """Randomly crops a portion of the input image and ground truth boxes.
     
@@ -124,7 +127,7 @@ def crop(rgb, boxes, width, height, min_fraction=0.5):
     height = tf.minimum(height, tf.shape(rgb)[0])
 
     #condense ragged tensor
-    [x, y, w, h] = tf.unstack(boxes.to_tensor(), axis=1)
+    [x, y, w, h] = tf.unstack(boxes.to_tensor(), num=4, axis=1)
 
     #identify candidate cells to include in cropped roi
     c_width = tf.less(w, tf.cast(width, tf.float32))
@@ -186,6 +189,7 @@ def crop(rgb, boxes, width, height, min_fraction=0.5):
     return crop, boxes
   
 
+@tf.function
 def jitter(boxes, percent=0.05):
     """Randomly displaces bounding boxes using uniform noise proportional
     to a percentage of box dimensions.
@@ -210,7 +214,7 @@ def jitter(boxes, percent=0.05):
     """
     
     #condense ragged tensor
-    [x, y, w, h] = tf.unstack(boxes.to_tensor(), axis=1)
+    [x, y, w, h] = tf.unstack(boxes.to_tensor(), num=4, axis=1)
     
     #generate noise vectors
     x_noise = tf.random.uniform(tf.shape(x), -percent, percent, tf.float32)
@@ -226,6 +230,7 @@ def jitter(boxes, percent=0.05):
     return boxes
 
 
+@tf.function
 def shrink(boxes, percent=0.05):
     """Randomly resizes bounding boxes proportional to box dimensions.
     
@@ -248,7 +253,7 @@ def shrink(boxes, percent=0.05):
     """
     
     #condense ragged tensor
-    [x, y, w, h] = tf.unstack(boxes.to_tensor(), axis=1)
+    [x, y, w, h] = tf.unstack(boxes.to_tensor(), num=4, axis=1)
     
     #generate noise vectors
     w_noise = tf.random.uniform(tf.shape(x), 1.0-percent, 1.0+percent, tf.float32)

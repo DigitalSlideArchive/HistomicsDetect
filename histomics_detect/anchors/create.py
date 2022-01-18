@@ -2,6 +2,7 @@ from histomics_detect.boxes import filter_edge_boxes
 import tensorflow as tf
 
 
+@tf.function
 def create_anchors(anchor_px, field, width, height):
     """Generates anchors given anchor sizes, receptive field size, and input image size.
     
@@ -62,6 +63,7 @@ def create_anchors(anchor_px, field, width, height):
     return anchors
 
 
+@tf.function
 def _generate_x_y_pairs(px, field, width, height):
     """Generates 2D tensors containing the (x,y) corner positions of anchors for a
     square px x px anchor, height x width image, and given receptive field size.
@@ -111,6 +113,7 @@ def _generate_x_y_pairs(px, field, width, height):
     return x_pair, y_pair
 
 
+@tf.function
 def _anchor_corners(size, field, length):
     """Generates a sequence of anchor corner positions along one dimension of an image.
     
