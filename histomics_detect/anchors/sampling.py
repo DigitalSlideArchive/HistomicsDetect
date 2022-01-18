@@ -39,6 +39,7 @@ def sample_anchors(positive, negative, max_anchors=256, np_ratio=2.0):
     neg_lim = max_anchors - tf.cast(tf.cast(max_anchors / (1 + np_ratio), tf.float32), tf.int32)
     nneg = tf.minimum(tf.cast(tf.cast(tf.shape(positive)[0], tf.float32) * np_ratio, tf.int32),
                       neg_lim)
+    nneg = tf.minimum(tf.shape(negative)[0], nneg)
     nneg = tf.maximum(nneg, 1)
     
     #sample positive anchors
