@@ -189,6 +189,7 @@ class FasterRCNN(tf.keras.Model):
         self.frcnn_args = frcnn_args
         self.train_args = train_args
         self.validation_args = validation_args
+        self.anchor_sizes = anchor_sizes
         
         #build backbone, rpn, and terminal network
         backbone, preprocessor = pretrained(backbone_args['name'], train_args['train_shape'])
