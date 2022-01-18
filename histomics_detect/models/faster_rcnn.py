@@ -162,8 +162,7 @@ class FasterRCNN(tf.keras.Model):
         proposals.
     """
     
-    def __init__(self, backbone_name, backbone_args, rpn_args, frcnn_args, train_args,
-                 validation_args, anchor_sizes,
+    def __init__(self, backbone_args, rpn_args, frcnn_args, train_args, validation_args, anchor_sizes,
                  objectness_metrics = [tf.keras.metrics.AUC(curve="PR", name='prauc'),
                                        tf.keras.metrics.Recall(name='tpr'),
                                        tf.keras.metrics.FalseNegatives(name='fn'),
@@ -173,7 +172,6 @@ class FasterRCNN(tf.keras.Model):
         super(FasterRCNN, self).__init__(**kwargs)
 
         #capture input configuration parameters
-        self.backbone_name = backbone_name
         self.backbone_args = backbone_args
         self.rpn_args = rpn_args
         self.frcnn_args = frcnn_args
@@ -182,7 +180,7 @@ class FasterRCNN(tf.keras.Model):
         self.anchor_sizes = anchor_sizes #sizes of anchors at each receptive field
         
         #build backbone, rpn, and terminal network
-        backbone, preprocessor = pretrained(backbone_name, train_args['train_shape'])
+        backbone, preprocessor = pretrained(backbone_args['name'], train_args['train_shape'])
         self.backbone = residual(backbone, preprocessor, backbone_args['blocks'], backbone_args['stride'])
         self.rpnetwork = rpn(backbone.output.shape[-1], len(anchor_sizes), **rpn_args)
         self.fastrcnn = fast_rcnn(backbone.output.shape[-1], **frcnn_args)        
@@ -222,8 +220,7 @@ class FasterRCNN(tf.keras.Model):
 
 
     def get_config(self):
-        return {'backbone_name': self.backbone_name, 
-                'backbone_args': self.backbone_args,
+        return {'backbone_args': self.backbone_args,
                 'rpn_args': self.rpn_args,
                 'frcnn_args': self.frcnn_args,
                 'train_args': self.train_args,
