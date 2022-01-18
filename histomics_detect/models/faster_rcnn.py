@@ -496,7 +496,7 @@ class FasterRCNN(tf.keras.Model):
     
     
     @tf.function
-    def call(self, rgb, tau=None, nms_iou=None):
+    def call(self, rgb, tau=None, nms_iou=None, margin=0):
         """
         call() produces thresholded and roialign refined predictions from a trained
         network. This is the most useful for users who don't want to apply their own
@@ -514,6 +514,10 @@ class FasterRCNN(tf.keras.Model):
             Intersection over union threshold used to remove redundant proposals
             during non-max suppression. Range is (0, 1]. Defaults to model
             attribute (default value 0.3).
+        margin: int32
+            The margin value is used to clear predictions from the edge of the
+            input image. All objects intersecting partially or wholly with this 
+            margin will be removed. Default value 0 pixels performs no clearing.
             
         Returns
         -------
@@ -541,7 +545,11 @@ class FasterRCNN(tf.keras.Model):
         align_boxes = self.align(rpn_boxes_nms, features, self.field, 
                                  self.pool, self.tiles)
         
-        return align_boxes
+        #filter edge boxes
+        filtered, mask = filter_edge_boxes(align_boxes, tf.shape(rgb)[1],
+                                           tf.shape(rgb)[0], margin)
+        
+        return filtered
 
         
     @tf.function(experimental_relax_shapes=True)
