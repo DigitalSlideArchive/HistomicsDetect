@@ -3,6 +3,8 @@ from histomics_detect.anchors.filter import filter_anchors
 from histomics_detect.anchors.sampling import sample_anchors
 from histomics_detect.boxes import parameterize, unparameterize, clip_boxes, tf_box_transform, filter_edge_boxes
 from histomics_detect.metrics import iou, greedy_iou_mapping, AveragePrecision
+from histomics_detect.networks.backbones import pretrained, residual
+from histomics_detect.networks.rpns import rpn
 from histomics_detect.networks.fast_rcnn import fast_rcnn
 from histomics_detect.networks.field_size import field_size
 from histomics_detect.roialign.roialign import roialign
@@ -160,8 +162,8 @@ class FasterRCNN(tf.keras.Model):
         proposals.
     """
     
-    def __init__(self, rpnetwork, backbone, shape, anchor_px, lmbda=10.0, 
-                 pool=2, tiles=3, tau=0.5, nms_iou=0.3, map_iou=0.5, margin=32,
+    def __init__(self, backbone_name, backbone_args, rpn_args, frcnn_args, anchor_sizes, 
+                 lmbda=10.0, tau=0.5, nms_iou=0.3, map_iou=0.5, margin=32,
                  objectness_metrics = [tf.keras.metrics.AUC(curve="PR", name='prauc'),
                                        tf.keras.metrics.Recall(name='tpr'),
                                        tf.keras.metrics.FalseNegatives(name='fn'),
@@ -171,42 +173,63 @@ class FasterRCNN(tf.keras.Model):
                                        AveragePrecision(iou_thresh = 0.75, delta=0.1, name='ap75')],
                  **kwargs):
     
-        super(FasterRCNN, self).__init__()
+        super(FasterRCNN, self).__init__(**kwargs)
 
-        #add models to self
-        self.rpnetwork = rpnetwork
-        self.backbone = backbone
-        self.fastrcnn = fast_rcnn(backbone, tiles=tiles, pool=pool)
+        #capture input configuration parameters
+        self.backbone_name = backbone_name
+        self.backbone_args = backbone_args
+        self.rpn_args = rpn_args
+        self.frcnn_args = frcnn_args
+        self.anchor_sizes = anchor_sizes #sizes of anchors at each receptive field
+        self.lmbda = lmbda #loss mixing weights
+        self.tau = tau  #objectness threshold for calling positives during validation
+        self.nms_iou = nms_iou #iou threshold for applying nms during validation
+        self.map_iou = map_iou #iou threshold for greedy mapping during validation
+        self.margin = margin #margin for clearing boxes and predictions near image edge during validation
+        
+        #build backbone, rpn, and terminal network
+        backbone, preprocessor = pretrained(backbone_name, backbone_args['train_shape'])
+        self.backbone = residual(backbone, preprocessor, backbone_args['blocks'], backbone_args['stride'])
+        self.rpnetwork = rpn(backbone.output.shape[-1], len(anchor_sizes), **rpn_args)
+        self.fastrcnn = fast_rcnn(backbone.output.shape[-1], **frcnn_args)        
 
         #capture field, anchor sizes, loss mixing
-        self.field = tf.cast(field_size(backbone), tf.float32)
-        self.anchor_px = anchor_px
-        self.lmbda = lmbda
+        self.field = tf.cast(field_size(self.backbone), tf.float32)
         
         #capture roialign parameters
-        self.pool = pool
-        self.tiles = tiles
+        self.pool = frcnn_args['pool']
+        self.tiles = frcnn_args['tiles']
         
-        #validation threshold for calling positives
-        self.tau = tau
-        
-        #validation margin for clearing boxes and predictions near image edge
-        self.margin = margin
-        
-        #validation iou threshold for applying nms
-        self.nms_iou = nms_iou
-        
-        #validation iou threshold for greedy mapping
-        self.map_iou = map_iou
+        #convert anchor_size to tensor
+        self.anchor_px = tf.constant(anchor_sizes, dtype=tf.int32)
         
         #generate anchors for training efficiency - works for fixed-size training
-        self.anchors = create_anchors(anchor_px, self.field, shape[0], shape[1])
+        self.anchors = create_anchors(self.anchor_px, self.field, backbone_args['train_shape'][0], 
+                                      backbone_args['train_shape'][1])
 
         #define metrics
         self.objectness_metrics = objectness_metrics
         self.regression_metrics = regression_metrics
 
 
+    def get_config(self):
+        return {'backbone_name': self.backbone_name, 
+                'backbone_args': self.backbone_args,
+                'rpn_args': self.rpn_args,
+                'frcnn_args': self.frcnn_args,
+                'anchor_sizes': self.anchor_sizes,
+                'lmbda': self.lmbda,
+                'tau': self.tau,
+                'nms_iou': self.nms_iou,
+                'map_iou': self.map_iou,
+                'margin': self.margin}
+    
+    
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
+    
+    
     def _update_objectness_metrics(self, objectness, positive):
         """
         Updates objectness metrics that are based on binary classification performance.
@@ -442,9 +465,6 @@ class FasterRCNN(tf.keras.Model):
             An M x N x K tensor of feature maps generated by the backbone. Can be used 
             to subsequently apply RoiAlign or other operations.
         """
-        
-        #normalize image
-        rgb = tf.keras.applications.resnet.preprocess_input(tf.cast(rgb, tf.float32))
 
         #expand dimensions
         rgb = tf.expand_dims(rgb, axis=0)
@@ -606,11 +626,8 @@ class FasterRCNN(tf.keras.Model):
         #convert boxes from RaggedTensor
         boxes = boxes.to_tensor()
 
-        #normalize image
-        norm = tf.keras.applications.resnet.preprocess_input(tf.cast(rgb, tf.float32))
-
         #expand dimensions
-        norm = tf.expand_dims(norm, axis=0)
+        norm = tf.expand_dims(tf.cast(rgb, tf.float32), axis=0)
 
         #filter and sample anchors
         positive_anchors, negative_anchors = filter_anchors(boxes, self.anchors)
