@@ -3,7 +3,6 @@ from histomics_detect.boxes import filter_edge_boxes
 import tensorflow as tf
 
 
-
 @tf.function
 def create_anchors(anchor_px, field, width, height, filter_boxes=True):
     """Generates anchors given anchor sizes, receptive field size, and input image size.
