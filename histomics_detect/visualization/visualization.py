@@ -1,6 +1,8 @@
 import matplotlib.pyplot as plt
 import tensorflow as tf
 
+plt.rcParams['figure.dpi'] = 300 #set figure dots-per-inch
+
 
 def _plot_boxes(boxes, color):
     """Adds bounding boxes with chosen color to current plot.
