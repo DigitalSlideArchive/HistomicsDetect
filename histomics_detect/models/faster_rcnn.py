@@ -70,6 +70,67 @@ def map_outputs(output, anchors, anchor_px, field):
     return mapped
 
 
+def faster_rcnn_config():
+    """Generates a default configuration for a faster RCNN model, setting default
+    parameters for the backbone, rpn, and fast RCNN sub-networks, as well as 
+    training and validation settings.
+    
+    Returns
+    -------
+    backbone_args: dict
+        Contains name of backbone and backbone parameters. Parameters vary 
+        by backbone type. Defaults to a resnet50 backbone with a stride of 1
+        and 14 residual blocks.    
+    rpn_args: dict
+        Describes the region proposal architecture, specifying the number
+        of layers, kernel sizes, output dimensions, and activations.
+    frcnn_args:
+        Describes the fast RCNN architecture, including the number and size
+        of dense layers, dense layer activations, and the roialign parameters.
+    train_args:
+        Describes the shape of the training images (uniform), the max number
+        of anchors to sample per image during training, the maximum ratio 
+        of negative to positive anchors sampled, and the loss weighting of
+        region proposal classifier and regression losses.
+    validation_args:
+        Describes objectness thresholds, iou thresholds for nms, iou threshold
+        to evaluate true positive / false positive / false negative rate, and
+        a sequence of iou thresholds to evaluate mean average precision.
+    """
+    
+    #feature network parameters
+    backbone_args = {'name': 'resnet50',
+                     'stride': 1, #stride (pixels) in first backbone convolution
+                     'blocks': 14} #number of residual blocks to use in backbone
+
+    #rpn network parameters
+    rpn_args = {'kernels': [3], #kernel sizes (receptive fields) for rpn convolutions
+                'dimensions': [256], #number of kernels per layer
+                'activations': ['relu']} #activation for rpn convolutions
+
+    #fast-rcnn network parameters
+    frcnn_args = {'units': [4096, 4096], #number of units in fast-rcnn dense layers
+                  'activations': ['relu', 'relu'], #activations for each dense layer
+                  'pool': 2, #number of tiles to pool during roialign
+                  'tiles': 3} #number of tiles to split regressed boxes into during roialign
+
+    #training parameters
+    train_args = {'train_shape': (224, 224, 3), #shape of training instances
+                  'max_anchors': 256, #maximum number of negative anchors to sample per epoch
+                  'np_ratio': 0.5, #largest ratio of negative : positive anchors per batch
+                  'lmbda': 10.0} #weighting factor for region-proposal network regression loss
+
+    #validation parameters
+    validation_args = {'tau': 0.5, #objectness threshold used to classify anchors at inference
+                       'nms_iou': 0.3, #min nms threshold used to filter overlapping objects
+                       'tpr_iou': 0.5, #single iou threshold used to calculate tpr/fpr/fnr
+                       'margin': 32, #margin of image edge to exclude from validation (pixels)
+                       'ap_ious': [0.25, 0.5, 0.75], #ious thresholds to use in evaluating mAP
+                       'ap_delta': 0.1} #precision step size for calculating mAP
+
+    return backbone_args, rpn_args, frcnn_args, train_args, validation_args
+
+
 class FasterRCNN(tf.keras.Model):
     """
     This class implements a faster RCNN model which combines a backbone feature
