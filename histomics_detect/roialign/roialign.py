@@ -1,6 +1,7 @@
 import tensorflow as tf
 
 
+@tf.function
 def roialign(features, boxes, field, pool=2, tiles=3):
     """Performs roialign on a collection of regressed bounding boxes.
     
@@ -62,6 +63,7 @@ def roialign(features, boxes, field, pool=2, tiles=3):
     return interpolated
 
 
+@tf.function
 def _roialign_coords(boxes, n_points):
     """Generates arguments for bilinear interpolation of feature maps
     for a single bounding box.
@@ -119,6 +121,7 @@ def _roialign_coords(boxes, n_points):
     return sample
 
 
+@tf.function
 def _bilinear(features, x, y):
     """
     Performs bilinear interpolation of a 3d tensor along first two
@@ -163,6 +166,7 @@ def _bilinear(features, x, y):
     return interpolated
 
 
+@tf.function
 def _linear_indices(x, size):
     """
     Calculates locations of upper and lower reference points used for
@@ -192,6 +196,7 @@ def _linear_indices(x, size):
     return lower, upper
 
 
+@tf.function
 def _linear_f(features, fixed, lower, upper, axis):
     """
     Extracts feature values at left/right or top/bottom reference
@@ -247,6 +252,7 @@ def _linear_f(features, fixed, lower, upper, axis):
     return f_lower, f_upper
 
 
+@tf.function
 def _linear_interp(f_lower, f_upper, x, lower):
     """
     One-dimensional interpolation given the features values at reference points.

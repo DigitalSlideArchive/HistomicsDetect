@@ -79,6 +79,7 @@ def dataset(path, png_parser, csv_parser, size, cases):
     return ds
 
 
+@tf.function
 def read_csv(csv_file):
     """
     Reads a csv file describing bounding boxes using tensorflow operations.
@@ -129,6 +130,7 @@ def read_csv(csv_file):
     return boxes
 
 
+@tf.function
 def read_png(png_file):
     """
     Reads a png file using tensorflow operations.
@@ -150,6 +152,7 @@ def read_png(png_file):
     return rgb
 
 
+@tf.function
 def resize(rgb, boxes, factor):
     """Resizes input image and bounding boxes.
     

@@ -2,6 +2,7 @@ from histomics_detect.metrics.iou import iou
 import tensorflow as tf
 
 
+@tf.function
 def filter_anchors(boxes, anchors, alpha=0.7, beta=0.3, gamma=0.3):
     """Compares anchors to ground truth to determine positive and negative
     anchors.
