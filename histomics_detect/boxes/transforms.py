@@ -214,7 +214,7 @@ def filter_edge_boxes(boxes, width: float, height: float, margin: float = 5.0):
     mask: tensor (bool)
         M length tensor where true indicates box was retained.
     """
-    
+
     margin = tf.cast(margin, tf.float32)
     width = tf.cast(width, tf.float32)
     height = tf.cast(height, tf.float32)
@@ -230,6 +230,7 @@ def filter_edge_boxes(boxes, width: float, height: float, margin: float = 5.0):
     mask = tf.logical_and(min_cond, max_cond)
 
     # stack columns and collect boxes that fulfill the condition
+
     filtered_boxes = tf.gather_nd(tf.stack([x, y, w, h], axis=1), tf.where(mask))
     
     return filtered_boxes, mask

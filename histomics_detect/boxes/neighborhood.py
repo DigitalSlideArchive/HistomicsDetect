@@ -2,13 +2,16 @@ from typing import Union
 import tensorflow as tf
 import tensorflow.keras.backend as kb
 
-from histomics_detect.metrics import iou
+from histomics_detect.metrics.iou import iou
 
 
 def assemble_single_neighborhood(anchor_id: int, interpolated: tf.Tensor, neighborhood_indeces: tf.Tensor,
-                                 neighborhood_additional_info: tf.Tensor, use_image_features: bool = True) \
+                                 neighborhood_additional_info: tf.Tensor, use_image_features: bool = True,
+                                 use_joint_features: bool = False, use_cross_feature: bool = False) \
         -> tf.float32:
     """
+    DEPRECIATED: unused
+
     assembles the prediction representations for a neighborhood of a single prediction
 
     the neighborhood assembly of a single prediction consists of
@@ -37,6 +40,11 @@ def assemble_single_neighborhood(anchor_id: int, interpolated: tf.Tensor, neighb
     
     Parameters
     ----------
+    use_joint_features: bool
+        creates a bounding box spanning the neighboring boxes and interpolates the features for that
+    use_cross_feature: bool
+        creates a cross shape out of two intersecting bounding boxes spanning from the center until specified end or
+        image boundary
     anchor_id: int
         id of current prediction in [0, N-1]
     interpolated: tensor (float32)
@@ -57,6 +65,7 @@ def assemble_single_neighborhood(anchor_id: int, interpolated: tf.Tensor, neighb
 
     # collect image features
     if use_image_features:
+        # TODO implement joint feature, and cross feature
         neighborhood = tf.reshape(tf.gather(interpolated, neighborhood_indeces),
                                   [tf.size(neighborhood_indeces), tf.shape(interpolated)[1]])
         tiled_pred = tf.tile(tf.expand_dims(interpolated[anchor_id], axis=0), (tf.shape(neighborhood)[0], 1))
@@ -144,9 +153,8 @@ def single_neighborhood_additional_info(anchor_id, ious, rpn_boxes_positive,
     return additional_info, neighborhood_indexes
 
 
-def all_neighborhoods_additional_info(rpn_boxes_positive, prediction_ids,
-                                      normalization_factor: float,
-                                      threshold: Union[float, tf.Tensor]):
+def all_neighborhoods_additional_info(rpn_boxes_positive, prediction_ids, normalization_factor: float,
+                                      threshold: Union[float, tf.Tensor], use_distance: bool = False):
     """
     collect additional info and indexes for all neighborhoods by running the method
     'single_neighborhood_additional_info' for each prediction and reformatting the collected data
@@ -179,6 +187,8 @@ def all_neighborhoods_additional_info(rpn_boxes_positive, prediction_ids,
         distance normalization divider
     threshold: float
         threshold for neighborhood
+    use_distance: bool
+        use distance for neighborhood assembly instead of iou
 
     Returns
     -------
@@ -188,28 +198,47 @@ def all_neighborhoods_additional_info(rpn_boxes_positive, prediction_ids,
         the additional information of each neighborhood collected in one tensor
     neighborhoods_indexes: tensor (int32)
         the indexes of the anchors in each neighborhood
+    self_indexes: tensor (int32)
+        for each neighborhood the index of the main box is tiled by the number of other predictions in
+        the neighborhood and concatenated with the others
     """
 
     # calculate distance or ious
-    ious, _ = iou(rpn_boxes_positive, rpn_boxes_positive)
+    if use_distance:
+        centroids = rpn_boxes_positive[:, :2] + rpn_boxes_positive[:, 2:]/2
+        dist_x = (tf.expand_dims(centroids[:, 0], axis=1) - tf.expand_dims(centroids[:, 0], axis=0))
+        dist_y = (tf.expand_dims(centroids[:, 1], axis=1) - tf.expand_dims(centroids[:, 1], axis=0))
+        ious = 1/(dist_x**2 + dist_y**2)
+    else:
+        ious = iou(rpn_boxes_positive, rpn_boxes_positive)
 
     # assemble initial information
     neighborhood_sizes = tf.TensorArray(tf.int32, size=tf.shape(rpn_boxes_positive)[0])
     neighborhoods_additional_info, neighborhoods_indexes = single_neighborhood_additional_info(
         prediction_ids[0], ious, rpn_boxes_positive, normalization_factor, threshold)
-    neighborhood_sizes = neighborhood_sizes.write(0, tf.shape(neighborhoods_additional_info)[0])
+
+    current_neighborhood_size = tf.shape(neighborhoods_additional_info)[0]
+    neighborhood_sizes = neighborhood_sizes.write(0, current_neighborhood_size)
+    # self_indexes = tf.expand_dims(tf.tile(0, [current_neighborhood_size]), axis=1)
+    self_indexes = tf.expand_dims(tf.tile(tf.constant([0]), [current_neighborhood_size]), axis=1)
 
     # assemble neighborhoods for each prediction
     for x in prediction_ids[1:]:
         tf.autograph.experimental.set_loop_options(
             shape_invariants=[(neighborhoods_additional_info, tf.TensorShape([None, None])),
-                              (neighborhoods_indexes, tf.TensorShape([None, None]))])
+                              (neighborhoods_indexes, tf.TensorShape([None, None])),
+                              (self_indexes, tf.TensorShape([None, None]))])
         new_neighborhood, new_indexes = single_neighborhood_additional_info(
             x, ious, rpn_boxes_positive, normalization_factor, threshold)
 
-        neighborhood_sizes = neighborhood_sizes.write(x, tf.shape(new_neighborhood)[0])
+        current_neighborhood_size = tf.shape(new_neighborhood)[0]
+        neighborhood_sizes = neighborhood_sizes.write(x, current_neighborhood_size)
+
         neighborhoods_additional_info = tf.concat([neighborhoods_additional_info, new_neighborhood], axis=0)
         neighborhoods_indexes = tf.concat([neighborhoods_indexes, new_indexes], axis=0)
+
+        current_self_indexes = tf.expand_dims(tf.tile(tf.expand_dims(x, axis=0), [current_neighborhood_size]), axis=1)
+        self_indexes = tf.concat([self_indexes, current_self_indexes], axis=0)
     neighborhood_sizes = neighborhood_sizes.stack()
 
-    return neighborhood_sizes, neighborhoods_additional_info, neighborhoods_indexes
+    return neighborhood_sizes, neighborhoods_additional_info, neighborhoods_indexes, self_indexes

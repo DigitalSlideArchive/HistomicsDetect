@@ -1,9 +1,11 @@
+from typing import Tuple
 from histomics_detect.boxes import filter_edge_boxes
 import tensorflow as tf
 
 
+
 @tf.function
-def create_anchors(anchor_px, field, width, height):
+def create_anchors(anchor_px, field, width, height, filter_boxes=True):
     """Generates anchors given anchor sizes, receptive field size, and input image size.
     
     This function generates the complete set of anchors for an image with dimensions 
@@ -26,6 +28,8 @@ def create_anchors(anchor_px, field, width, height):
         Input image width in pixels.
     height: int32
         Input image height in pixels.
+    filter_boxes: bool
+        if true boxes are filtered, if they overlap with the border
         
     Returns
     -------
@@ -58,7 +62,9 @@ def create_anchors(anchor_px, field, width, height):
     anchors = tf.reshape(anchors * multiplier, (-1, 4))
 
     # remove anchors that cross the boundary
-    anchors, _ = filter_edge_boxes(anchors, width, height, 0)
+    if filter_boxes:
+        anchors, _ = filter_edge_boxes(anchors, width, height, 0)
+
 
     return anchors
 
@@ -113,7 +119,42 @@ def _generate_x_y_pairs(px, field, width, height):
     return x_pair, y_pair
 
 
+<<<<<<< HEAD
+def first_last_anchor_indexes(size, field, length) -> Tuple[int, int]:
+    """
+    calculates the first and last indexes of the anchors where a box of the size 'size' does not intersect
+    with the boundary of the image
+
+    Parameters
+    ----------
+    size: int32
+        Anchor size.
+    field: float32
+        Edge length of the receptive field in pixels. This defines the area of the
+        image that corresponds to 1 feature map from the backbone network and the
+        anchor gridding.
+    length: int32
+        Image edge length in pixels.
+
+    Returns
+    -------
+    first: int32
+        index of the first anchor that does not intersect with the boundary
+    last: int32
+        index of the last anchor
+    """
+    first = tf.math.ceil(tf.cast(size, tf.float32) /
+                         (2 * tf.cast(field, tf.float32)) - 1 / 2)
+    last = tf.math.floor((tf.cast(length, tf.float32) -
+                          tf.cast(size, tf.float32) / 2) /
+                         tf.cast(field, tf.float32) - 1 / 2)
+
+    return first, last
+
+
+=======
 @tf.function
+>>>>>>> main
 def _anchor_corners(size, field, length):
     """Generates a sequence of anchor corner positions along one dimension of an image.
     
@@ -141,11 +182,7 @@ def _anchor_corners(size, field, length):
     """
 
     # first and last anchor index
-    first = tf.math.ceil(tf.cast(size, tf.float32) /
-                         (2 * tf.cast(field, tf.float32)) - 1 / 2)
-    last = tf.math.floor((tf.cast(length, tf.float32) -
-                          tf.cast(size, tf.float32) / 2) /
-                         tf.cast(field, tf.float32) - 1 / 2)
+    first, last = first_last_anchor_indexes(size, field, length)
 
     # anchor corners
     corners = tf.cast(field, tf.float32) * (tf.range(first, last + 1) + 1 / 2) - tf.cast(size, tf.float32) / 2

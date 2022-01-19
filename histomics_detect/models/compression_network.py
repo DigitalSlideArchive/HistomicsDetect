@@ -37,9 +37,9 @@ class CompressionNetwork(tf.keras.Model, ABC):
             compression network that can compress image features
         """
         input_layer = tf.keras.Input(shape=[None, None, self.feature_size], name="compressed_input")
-        layer_1 = tf.keras.layers.Conv2DTranspose(self.feature_size, 3, activation=self.activation, padding='same',
+        layer_1 = tf.keras.layers.Conv2DTranspose(self.feature_size, 1, activation=self.activation, padding='same',
                                                   name="decompression_layer_1")(input_layer)
-        layer_2 = tf.keras.layers.Conv2DTranspose(self.anchor_size, 3, activation=self.activation, padding='same',
+        layer_2 = tf.keras.layers.Conv2DTranspose(self.anchor_size, 1, activation=self.activation, padding='same',
                                                   name="decompression_layer_2")(layer_1)
         return tf.keras.Model(inputs=input_layer, outputs=layer_2, name="decompression_network")
 

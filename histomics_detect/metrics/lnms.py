@@ -1,14 +1,14 @@
 import tensorflow as tf
-from typing import Tuple
+from typing import Tuple, Union
+from scipy.optimize import linear_sum_assignment
 
-from histomics_detect.metrics import iou
+from histomics_detect.metrics.iou import iou
 
 
-def lnms_metrics(boxes: tf.Tensor, rpn_boxes: tf.Tensor, scores: tf.Tensor) \
-        -> Tuple[int, int, int, int]:
+@tf.function
+def tf_linear_sum_assignment(boxes, rpn_boxes):
     """
-    calculates the number of true positives, false positives, true negatives, false negatives of the
-    score prediction
+    tensorflow wrapper for linear sum assignment function from scipy.optimice
 
     Parameters
     ----------
@@ -19,37 +19,15 @@ def lnms_metrics(boxes: tf.Tensor, rpn_boxes: tf.Tensor, scores: tf.Tensor) \
         M x 4 tensor where each row contains the x,y location of the upper left
         corner of a box and its width and height in that order. Typically the
         predictions.
-    scores: tensor (float32)
-        M x 1 tensor where each row contains the objectiveness score of the corresponding
-        rpn_boxes
 
     Returns
     -------
-    tp: int
-        true positives
-    tn: int
-        true negatives
-    fp: int
-        false positives
-    fn: int
-        false negatives
+    true_rpn_box_indexes: tensor (int32)
+        returns the indexes of the rpn_boxes assigned to the corresponding gt box
 
     """
+    ious = iou(boxes, rpn_boxes)
+    out = tf.numpy_function(linear_sum_assignment, [ious, tf.constant(True)], [tf.int64, tf.int64])
+    row_ind, col_ind = out[0], out[1]
 
-    ious, _ = iou(boxes, rpn_boxes)
-
-    def func(i) -> tf.int32:
-        index = tf.cast(i, tf.int32)
-        assignment = tf.cast(tf.argmax(ious[index]), tf.int32)
-        return assignment
-
-    indeces = tf.expand_dims(tf.map_fn(lambda x: func(x), tf.range(0, tf.shape(ious)[0])), axis=1)
-    labels = tf.scatter_nd(indeces, tf.ones(tf.shape(indeces)), tf.shape(scores))
-    print(indeces)
-
-    tp = tf.reduce_sum(tf.cast(tf.logical_and(labels == 1, scores > 0.5), tf.int32))
-    tn = tf.reduce_sum(tf.cast(tf.logical_and(labels == 0, scores <= 0.5), tf.int32))
-    fp = tf.reduce_sum(tf.cast(tf.logical_and(labels == 0, scores > 0.5), tf.int32))
-    fn = tf.reduce_sum(tf.cast(tf.logical_and(labels == 1, scores <= 0.5), tf.int32))
-
-    return tp, tn, fp, fn
+    return tf.expand_dims(tf.cast(col_ind, tf.int32), axis=1)
