@@ -3,7 +3,7 @@ from PIL import Image
 import tensorflow as tf
 
 
-def dataset(path, png_parser, csv_parser, size, cases):
+def dataset(path, png_parser, csv_parser, size, cases=None):
     """Generates a tf.data.Dataset object containing matched region
     of interest .pngs and bounding box .csv files.
     
@@ -28,8 +28,9 @@ def dataset(path, png_parser, csv_parser, size, cases):
         case and roi name. The case and roi name should uniquely identify
         the roi within the dataset.
     cases: list of strings
-        A list of cases used to select rois for inclusion in the 
-        dataset.
+        An optional list of cases used to select rois for inclusion in the 
+        dataset. Default value of None will select all cases in 'path'.
+        Helpful when cases are grouped by folder
         
     Returns
     -------
@@ -61,7 +62,8 @@ def dataset(path, png_parser, csv_parser, size, cases):
                zip(png_case_roi, pngs, indexes) if index != -1]
         
     #filter on cases
-    matches = [match for match in matches if match[0] in cases]
+    if cases is not None:
+        matches = [match for match in matches if match[0] in cases]
             
     #format outputs
     matches = [(path + match[1], path + match[2]) for match in matches]
