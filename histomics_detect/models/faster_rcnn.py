@@ -639,13 +639,32 @@ class FasterRCNN(tf.keras.Model):
         
         #generate rpn predictions
         rpn_obj, rpn_boxes, features = self.raw(rgb)
+     
+        #evaluate rpn - generate anchors for input size image
+        anchors = create_anchors(self.anchor_px, self.field, 
+                                 tf.shape(rgb)[1], tf.shape(rgb)[0])
         
-        #select rpn proposals
-        rpn_boxes_positive, rpn_obj_positive, positive = self.threshold(rpn_boxes, rpn_obj, self.tau)
+        #evaluate rpn - filter into positive and negative anchors
+        positive_anchors, negative_anchors = filter_anchors(boxes, anchors)
+
+        #evaluate rpn - generate objectness scores
+        output = self.rpnetwork(features, training=False)[0]
+ 
+        #evaluate rpn - calculate objectness predictions and labels
+        rpn_obj_positive = tf.nn.softmax(map_outputs(output, positive_anchors,
+                                                     self.anchor_px, self.field))
+        rpn_obj_negative = tf.nn.softmax(map_outputs(output, negative_anchors,
+                                                     self.anchor_px, self.field))
+        rpn_obj_labels = tf.concat([tf.ones(tf.shape(rpn_obj_positive)[0], tf.uint8),
+                                    tf.zeros(tf.shape(rpn_obj_negative)[0], tf.uint8)],
+                                   axis=0)
+        
+        #select positive rpn proposals for nms and roialign
+        rpn_boxes_pred, rpn_obj_pred, _ = self.threshold(rpn_boxes, rpn_obj, self.tau)
         
         #perform non-max suppression on boxes
-        rpn_boxes_nms, rpn_obj_nms, selected = self.nms(rpn_boxes_positive,
-                                                        rpn_obj_positive, self.nms_iou)
+        rpn_boxes_nms, rpn_obj_nms, selected = self.nms(rpn_boxes_pred,
+                                                        rpn_obj_pred, self.nms_iou)
         
         #generate roialign predictions for rpn positive predictions
         align_boxes_nms = self.align(rpn_boxes_nms, features, self.field, self.pool, self.tiles)
@@ -654,8 +673,8 @@ class FasterRCNN(tf.keras.Model):
         boxes, _ = filter_edge_boxes(boxes, tf.shape(rgb)[1], tf.shape(rgb)[0], self.margin)     
         
         #filter edge boxes
-        filtered, mask = filter_edge_boxes(align_boxes_nms, tf.shape(rgb)[1], 
-                                                 tf.shape(rgb)[0], self.margin)
+        filtered, mask = filter_edge_boxes(align_boxes_nms, tf.shape(rgb)[1],
+                                           tf.shape(rgb)[0], self.margin)
         filtered_objectness = tf.boolean_mask(rpn_obj_nms, mask, axis=0)
         
         #calculate ious
@@ -674,8 +693,10 @@ class FasterRCNN(tf.keras.Model):
         align_ious = tf.reduce_max(align_ious, axis=1)
         
         #update objectness binary classification metrics
-        obj_metrics = self._update_objectness_metrics(filtered_objectness,
-                                                      tf.greater_equal(align_ious, self.tpr_iou))
+        obj_metrics = self._update_objectness_metrics(tf.concat([rpn_obj_positive,
+                                                                 rpn_obj_negative],
+                                                                axis=0),
+                                                      rpn_obj_labels)
         
         #update regression metrics
         reg_metrics = self._update_regression_metrics(boxes,
@@ -724,11 +745,10 @@ class FasterRCNN(tf.keras.Model):
             output = self.rpnetwork(features, training=True)
 
             #calculate rpn objectness loss
-            softmax = tf.keras.layers.Softmax()
-            rpn_obj_positive = softmax(map_outputs(output[0], positive_anchors,
-                                                   self.anchor_px, self.field))
-            rpn_obj_negative = softmax(map_outputs(output[0], negative_anchors,
-                                                   self.anchor_px, self.field))
+            rpn_obj_positive = tf.nn.softmax(map_outputs(output[0], positive_anchors,
+                                                         self.anchor_px, self.field))
+            rpn_obj_negative = tf.nn.softmax(map_outputs(output[0], negative_anchors,
+                                                         self.anchor_px, self.field))
             rpn_obj_labels = tf.concat([tf.ones(tf.shape(rpn_obj_positive)[0], tf.uint8),
                                         tf.zeros(tf.shape(rpn_obj_negative)[0], tf.uint8)],
                                        axis=0)
