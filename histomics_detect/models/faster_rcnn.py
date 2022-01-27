@@ -2,7 +2,7 @@ from histomics_detect.anchors.create import create_anchors
 from histomics_detect.anchors.filter import filter_anchors
 from histomics_detect.anchors.sampling import sample_anchors
 from histomics_detect.boxes import parameterize, unparameterize, clip_boxes, tf_box_transform, filter_edge_boxes
-from histomics_detect.metrics import iou, greedy_iou_mapping, AveragePrecision
+from histomics_detect.metrics import iou, greedy_iou_mapping, AveragePrecision, FalsePositiveRate, FalseNegativeRate
 from histomics_detect.networks.backbones import pretrained, residual
 from histomics_detect.networks.rpns import rpn
 from histomics_detect.networks.fast_rcnn import fast_rcnn
@@ -236,12 +236,7 @@ class FasterRCNN(tf.keras.Model):
     """
     
     def __init__(self, backbone_args, rpn_args, frcnn_args, train_args, validation_args, anchor_sizes,
-                 objectness_metrics = [tf.keras.metrics.AUC(curve="PR", name='prauc'),
-                                       tf.keras.metrics.Recall(name='tpr'),
-                                       tf.keras.metrics.FalseNegatives(name='fn'),
-                                       tf.keras.metrics.FalsePositives(name='fp')],
                  **kwargs):
-    
         super(FasterRCNN, self).__init__(**kwargs)
 
         #capture input configuration parameters
@@ -285,7 +280,10 @@ class FasterRCNN(tf.keras.Model):
                                       train_args['train_shape'][1])
 
         #define metrics
-        self.objectness_metrics = objectness_metrics
+        self.objectness_metrics = [tf.keras.metrics.AUC(curve="PR", name='prauc'),
+                                   tf.keras.metrics.Recall(name='tpr'),
+                                   FalsePositiveRate(name='fpr'),
+                                   FalseNegativeRate(name='fnr')]
         self.regression_metrics = [AveragePrecision(iou_thresh = t, 
                                                     delta=validation_args['ap_delta'],
                                                     name='ap' + str(int(100*t)))
@@ -725,43 +723,51 @@ class FasterRCNN(tf.keras.Model):
             features = self.backbone(norm, training=True)
             output = self.rpnetwork(features, training=True)
 
-            #transform outputs to 2D arrays with anchors in rows
+            #calculate rpn objectness loss
             softmax = tf.keras.layers.Softmax()
             rpn_obj_positive = softmax(map_outputs(output[0], positive_anchors,
                                                    self.anchor_px, self.field))
             rpn_obj_negative = softmax(map_outputs(output[0], negative_anchors,
                                                    self.anchor_px, self.field))
-            rpn_reg = map_outputs(output[1], positive_anchors, self.anchor_px,
-                                  self.field)
-
-            #generate objectness and regression labels
             rpn_obj_labels = tf.concat([tf.ones(tf.shape(rpn_obj_positive)[0], tf.uint8),
-                                    tf.zeros(tf.shape(rpn_obj_negative)[0], tf.uint8)],
-                                   axis=0)
-            rpn_reg_label = parameterize(positive_anchors, boxes)
-
-            #calculate objectness and regression labels
+                                        tf.zeros(tf.shape(rpn_obj_negative)[0], tf.uint8)],
+                                       axis=0)
             rpn_obj_loss = self.loss[0](tf.concat([rpn_obj_positive,
                                                    rpn_obj_negative], axis=0),
                                         tf.one_hot(rpn_obj_labels, 2))
+
+            #ccalculate rpn regression loss
+            rpn_reg = map_outputs(output[1], positive_anchors, self.anchor_px,
+                                  self.field)
+            rpn_reg_label = parameterize(positive_anchors, boxes)
             rpn_reg_loss = self.loss[1](rpn_reg_label, rpn_reg)
 
             #weighted sum of objectness and regression losses
-            rpn_total_loss = rpn_obj_loss / 256 + \
+            rpn_total_loss = rpn_obj_loss / self.max_anchors + \
                 rpn_reg_loss * self.lmbda / tf.cast(tf.shape(self.anchors)[0], tf.float32)
             
-            #fast r-cnn regression of rpn regressions from positive anchors
-            rpn_boxes = unparameterize(rpn_reg, positive_anchors)
-            rpn_boxes_positive, _ = filter_anchors(boxes, rpn_boxes)
-            interpolated = roialign(features, rpn_boxes_positive, self.field, 
-                                    pool=self.pool, tiles=self.tiles)
-            align_reg = self.fastrcnn(interpolated)
+            #roi align and fast rcnn operations to be performed if positive anchors exist
+            def nonempty():
             
-            #calculate fast r-cnn regression loss
-            align_boxes = unparameterize(align_reg, rpn_boxes_positive)            
-            align_reg_label = parameterize(rpn_boxes_positive, boxes)
-            align_reg_loss = self.loss[1](align_reg_label, align_reg)
-
+                #fast r-cnn regression of roialign results for positive anchors
+                rpn_boxes = unparameterize(rpn_reg, positive_anchors)
+                rpn_boxes_positive, _ = filter_anchors(boxes, rpn_boxes)
+                interpolated = roialign(features, rpn_boxes_positive, self.field, 
+                                        pool=self.pool, tiles=self.tiles)
+                align_reg = self.fastrcnn(interpolated)
+            
+                #transform aligned regressions to box representation and calculate labels
+                align_boxes = unparameterize(align_reg, rpn_boxes_positive)
+                align_reg_label = parameterize(rpn_boxes_positive, boxes)
+            
+                return self.loss[1](align_reg_label, align_reg)
+        
+            def empty():
+                return 0.0
+        
+            #conditional when positive anchors exist
+            align_reg_loss = tf.cond(tf.size(positive_anchors) > 0, nonempty, empty)
+                
         #calculate backbone gradients and optimize
         gradients = tape.gradient(rpn_total_loss, self.backbone.trainable_weights)
         self.optimizer.apply_gradients(zip(gradients, self.backbone.trainable_weights))
@@ -773,11 +779,7 @@ class FasterRCNN(tf.keras.Model):
         #calculate roialign gradients and optimize
         gradients = tape.gradient(align_reg_loss, self.fastrcnn.trainable_weights)  
         self.optimizer.apply_gradients(zip(gradients, self.fastrcnn.trainable_weights))
-    
-        #ious for rpn, roialign
-        align_ious = iou(align_boxes, boxes)
-        align_ious = tf.reduce_max(align_ious, axis=1)
-
+        
         #update metrics
         metrics = self._update_objectness_metrics(tf.concat([rpn_obj_positive,
                                                              rpn_obj_negative], 
