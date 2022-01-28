@@ -118,7 +118,8 @@ def faster_rcnn_config():
     train_args = {'train_shape': (224, 224, 3), #shape of training instances
                   'max_anchors': 256, #maximum number of negative anchors to sample per epoch
                   'np_ratio': 0.5, #largest ratio of negative : positive anchors per batch
-                  'lmbda': 10.0} #weighting factor for region-proposal network regression loss
+                  'lmbda': 10.0, #weighting factor for region-proposal network regression loss
+                  'hard_fraction': 0.0} #fraction of sampled negative anchors that are hard
 
     #validation parameters
     validation_args = {'tau': 0.5, #objectness threshold used to classify anchors at inference
@@ -267,6 +268,7 @@ class FasterRCNN(tf.keras.Model):
         self.lmbda = train_args['lmbda'] #loss mixing weights
         self.max_anchors = train_args['max_anchors'] #max negative anchors to sample
         self.np_ratio = train_args['np_ratio'] #max acceptable ratio of negative : positive anchors
+        self.hard_fraction = train_args['hard_fraction'] #fraction of sampled anchors that are hard
         
         #capture validation arguments
         self.tau = validation_args['tau']
@@ -753,7 +755,8 @@ class FasterRCNN(tf.keras.Model):
                                                                 negative_anchors,
                                                                 negative_obj[:,1],
                                                                 self.max_anchors, 
-                                                                self.np_ratio)
+                                                                self.np_ratio,
+                                                                self.hard_fraction)
 
             #calculate objectness loss for sampled positive and negative anchors
             positive_obj = tf.nn.softmax(map_outputs(output[0], positive_anchors,
