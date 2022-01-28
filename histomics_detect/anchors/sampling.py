@@ -73,3 +73,34 @@ def sample_anchors(positive, negative, negative_obj, max_anchors=256, np_ratio=2
     negative = tf.concat([hard, other], axis=0)
     
     return positive, negative
+
+ 
+@tf.function
+def _sample_no_replacement(maxval, size):
+    """Generates indices to sample from a tensor without replacement.
+    
+    This function generates a maxval-length tensor of random values
+    and uses the sorting indices of this array to generate the random
+    sample.
+        
+    Parameters
+    ----------
+    maxval: int32
+        Value of the largest possible index to sample. 
+    size: int32
+        The number of elements to sample.
+        
+    Returns
+    -------
+    positive: tensor (float32)
+        m x 4 tensor of positions of positive sampled anchors, where m <= M.
+    negative: tensor (float32)
+        n x 4 tensor of positions of negative sampled anchors, where n <= N and
+        n + m <= max_n and m/n >= min_ratio.
+    """
+    
+    #sample 'size' int32 values up to 'maxval' without replacement
+    z = tf.random.uniform((maxval+1,), 0, 1)
+    _, indices = tf.nn.top_k(z, size)
+    
+    return indices
