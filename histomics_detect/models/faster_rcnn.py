@@ -118,7 +118,8 @@ def faster_rcnn_config():
     train_args = {'train_shape': (224, 224, 3), #shape of training instances
                   'max_anchors': 256, #maximum number of negative anchors to sample per epoch
                   'np_ratio': 0.5, #largest ratio of negative : positive anchors per batch
-                  'lmbda': 10.0} #weighting factor for region-proposal network regression loss
+                  'lmbda': 10.0, #weighting factor for region-proposal network regression loss
+                  'hard_fraction': 0.0} #fraction of sampled negative anchors that are hard
 
     #validation parameters
     validation_args = {'tau': 0.5, #objectness threshold used to classify anchors at inference
@@ -267,6 +268,7 @@ class FasterRCNN(tf.keras.Model):
         self.lmbda = train_args['lmbda'] #loss mixing weights
         self.max_anchors = train_args['max_anchors'] #max negative anchors to sample
         self.np_ratio = train_args['np_ratio'] #max acceptable ratio of negative : positive anchors
+        self.hard_fraction = train_args['hard_fraction'] #fraction of sampled anchors that are hard
         
         #capture validation arguments
         self.tau = validation_args['tau']
@@ -732,82 +734,93 @@ class FasterRCNN(tf.keras.Model):
         #expand dimensions
         norm = tf.expand_dims(tf.cast(rgb, tf.float32), axis=0)
 
-        #filter and sample anchors
+        #label anchors as negative, positive
         positive_anchors, negative_anchors = filter_anchors(boxes, self.anchors)
-        positive_anchors, negative_anchors = sample_anchors(positive_anchors, negative_anchors, 
-                                                            self.max_anchors, self.np_ratio)
 
         #training step
         with tf.GradientTape(persistent=True) as tape:
-
+            
             #predict and capture intermediate features
             features = self.backbone(norm, training=True)
             output = self.rpnetwork(features, training=True)
+            
+            #calculate rpn objectness loss for all positive and negative anchors
+            positive_obj = tf.nn.softmax(map_outputs(output[0], positive_anchors,
+                                                         self.anchor_px, self.field))
+            negative_obj = tf.nn.softmax(map_outputs(output[0], negative_anchors,
+                                                         self.anchor_px, self.field))
+            
+            #sample anchors and perform hard-negative mining
+            positive_anchors, negative_anchors = sample_anchors(positive_anchors, 
+                                                                negative_anchors,
+                                                                negative_obj[:,1],
+                                                                self.max_anchors, 
+                                                                self.np_ratio,
+                                                                self.hard_fraction)
 
-            #calculate rpn objectness loss
-            rpn_obj_positive = tf.nn.softmax(map_outputs(output[0], positive_anchors,
+            #calculate objectness loss for sampled positive and negative anchors
+            positive_obj = tf.nn.softmax(map_outputs(output[0], positive_anchors,
                                                          self.anchor_px, self.field))
-            rpn_obj_negative = tf.nn.softmax(map_outputs(output[0], negative_anchors,
+            negative_obj = tf.nn.softmax(map_outputs(output[0], negative_anchors,
                                                          self.anchor_px, self.field))
-            rpn_obj_labels = tf.concat([tf.ones(tf.shape(rpn_obj_positive)[0], tf.uint8),
-                                        tf.zeros(tf.shape(rpn_obj_negative)[0], tf.uint8)],
+            obj_labels = tf.concat([tf.ones(tf.shape(positive_obj)[0], tf.uint8),
+                                        tf.zeros(tf.shape(negative_obj)[0], tf.uint8)],
                                        axis=0)
-            rpn_obj_loss = self.loss[0](tf.concat([rpn_obj_positive,
-                                                   rpn_obj_negative], axis=0),
-                                        tf.one_hot(rpn_obj_labels, 2))
+            obj_loss = self.loss[0](tf.concat([positive_obj, negative_obj], axis=0),
+                                    tf.one_hot(obj_labels, 2))
 
             #ccalculate rpn regression loss
-            rpn_reg = map_outputs(output[1], positive_anchors, self.anchor_px,
-                                  self.field)
-            rpn_reg_label = parameterize(positive_anchors, boxes)
-            rpn_reg_loss = self.loss[1](rpn_reg_label, rpn_reg)
+            regression = map_outputs(output[1], positive_anchors, self.anchor_px,
+                                     self.field)
+            reg_label = parameterize(positive_anchors, boxes)
+            reg_loss = self.loss[1](reg_label, regression)          
 
             #weighted sum of objectness and regression losses
-            rpn_total_loss = rpn_obj_loss / self.max_anchors + \
-                rpn_reg_loss * self.lmbda / tf.cast(tf.shape(self.anchors)[0], tf.float32)
+            rpn_loss = obj_loss / self.max_anchors + \
+                reg_loss * self.lmbda / tf.cast(tf.shape(self.anchors)[0], tf.float32)
             
             #roi align and fast rcnn operations to be performed if positive anchors exist
             def nonempty():
             
                 #fast r-cnn regression of roialign results for positive anchors
-                rpn_boxes = unparameterize(rpn_reg, positive_anchors)
+                rpn_boxes = unparameterize(regression, positive_anchors)
                 rpn_boxes_positive, _ = filter_anchors(boxes, rpn_boxes)
                 interpolated = roialign(features, rpn_boxes_positive, self.field, 
                                         pool=self.pool, tiles=self.tiles)
-                align_reg = self.fastrcnn(interpolated)
+                align = self.fastrcnn(interpolated)
             
                 #transform aligned regressions to box representation and calculate labels
-                align_boxes = unparameterize(align_reg, rpn_boxes_positive)
-                align_reg_label = parameterize(rpn_boxes_positive, boxes)
+                align_boxes = unparameterize(align, rpn_boxes_positive)
+                align_label = parameterize(rpn_boxes_positive, boxes)
             
-                return self.loss[1](align_reg_label, align_reg)
+                return self.loss[1](align_label, align)
         
             def empty():
                 return 0.0
         
             #conditional when positive anchors exist
-            align_reg_loss = tf.cond(tf.size(positive_anchors) > 0, nonempty, empty)
+            align_loss = tf.cond(tf.size(positive_anchors) > 0, nonempty, empty)
                 
         #calculate backbone gradients and optimize
-        gradients = tape.gradient(rpn_total_loss, self.backbone.trainable_weights)
+        gradients = tape.gradient(rpn_loss, self.backbone.trainable_weights)
         self.optimizer.apply_gradients(zip(gradients, self.backbone.trainable_weights))
 
         #calculate rpn gradients and optimize
-        gradients = tape.gradient(rpn_total_loss, self.rpnetwork.trainable_weights)  
+        gradients = tape.gradient(rpn_loss, self.rpnetwork.trainable_weights)  
         self.optimizer.apply_gradients(zip(gradients, self.rpnetwork.trainable_weights))
             
         #calculate roialign gradients and optimize
-        gradients = tape.gradient(align_reg_loss, self.fastrcnn.trainable_weights)  
+        gradients = tape.gradient(align_loss, self.fastrcnn.trainable_weights)  
         self.optimizer.apply_gradients(zip(gradients, self.fastrcnn.trainable_weights))
         
         #update metrics
-        metrics = self._update_objectness_metrics(tf.concat([rpn_obj_positive,
-                                                             rpn_obj_negative], 
+        metrics = self._update_objectness_metrics(tf.concat([positive_obj,
+                                                             negative_obj], 
                                                             axis=0),
-                                                  rpn_obj_labels)
+                                                  obj_labels)
 
         #build output loss dict
-        losses = {'loss_rpn_obj': rpn_obj_loss, 'loss_rpn_reg': rpn_reg_loss,
-                  'loss_align_reg': align_reg_loss}
+        losses = {'loss_rpn_obj': obj_loss, 'loss_rpn_reg': reg_loss,
+                  'loss_align_reg': align_loss}
 
         return {**losses, **metrics}

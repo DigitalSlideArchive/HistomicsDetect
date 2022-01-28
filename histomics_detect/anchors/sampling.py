@@ -2,7 +2,8 @@ import tensorflow as tf
 
 
 @tf.function
-def sample_anchors(positive, negative, max_anchors=256, np_ratio=2.0):
+def sample_anchors(positive, negative, negative_obj, max_anchors=256, np_ratio=2.0,
+                   hard_fraction=0.0):
     """Sample to balance the proportion of positive and negative anchors used in 
     training.
     
@@ -21,10 +22,17 @@ def sample_anchors(positive, negative, max_anchors=256, np_ratio=2.0):
         any ground truth object. Each row contains the x,y center location of the
         anchor in pixel units relative in the image coordinate frame, and the
         anchor width and height.
+    negative_obj: tensor (float32)
+        N or N x 1 tensor of objectness scores for negative anchors. This is used
+        to enrich the sampled negative anchors with hard negatives by selecting
+        misclassified negatives with high scores.
     max_anchors: int32
         Maximum number of total anchors to sample. Default value 256.
     np_ratio: float32
         Will sample at most negative : positive ratio anchors. Default value 2.0.
+    hard_fraction: float32
+        Make hard_fraction percent of negative anchors consist of hard negatives
+        that are missclassified. Range is [0, 1]. Default value 0.
         
     Returns
     -------
@@ -45,15 +53,28 @@ def sample_anchors(positive, negative, max_anchors=256, np_ratio=2.0):
     #sample positive anchors
     npos = tf.minimum(tf.shape(positive)[0], max_anchors-nneg)
     indices = _sample_no_replacement(tf.shape(positive)[0]-1, npos)
-    positive = tf.gather(positive, indices)    
+    positive = tf.gather(positive, indices)
     
-    #sample negative anchors
-    indices = _sample_no_replacement(tf.shape(negative)[0]-1, nneg)
-    negative = tf.gather(negative, indices)
+    #take the top ceil(hard_frac * nneg) hardest negatives
+    nhard = tf.cast(tf.math.ceil(hard_fraction * tf.cast(nneg, tf.float32)), tf.int32)
+    
+    #sort negative anchors by objectness score (descending)
+    order = tf.argsort(negative_obj, axis=0, direction='DESCENDING')
+    hard_indices, other_indices = tf.split(order, [nhard, tf.shape(negative)[0]-nhard])
+    
+    #get hard anchors
+    hard = tf.gather(negative, hard_indices, axis=0)
+    
+    #sample remaining negative anchors
+    random = _sample_no_replacement(tf.shape(negative)[0]-nhard-1, nneg-nhard)
+    other = tf.gather(negative, tf.gather(other_indices, random), axis=0)
+    
+    #combine hard negatives and randomly sampled negatives
+    negative = tf.concat([hard, other], axis=0)
     
     return positive, negative
-  
 
+ 
 @tf.function
 def _sample_no_replacement(maxval, size):
     """Generates indices to sample from a tensor without replacement.
