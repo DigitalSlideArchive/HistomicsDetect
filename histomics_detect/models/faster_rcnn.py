@@ -99,7 +99,7 @@ def faster_rcnn_config():
     """
     
     #feature network parameters
-    backbone_args = {'name': 'resnet50',
+    backbone_args = {'name': 'resnet50v2',
                      'stride': 1, #stride (pixels) in first backbone convolution
                      'blocks': 14} #number of residual blocks to use in backbone
 
@@ -109,7 +109,7 @@ def faster_rcnn_config():
                 'activations': ['relu']} #activation for rpn convolutions
 
     #fast-rcnn network parameters
-    frcnn_args = {'units': [4096, 4096], #number of units in fast-rcnn dense layers
+    frcnn_args = {'units': [1024, 1024], #number of units in fast-rcnn dense layers
                   'activations': ['relu', 'relu'], #activations for each dense layer
                   'pool': 2, #number of tiles to pool during roialign
                   'tiles': 3} #number of tiles to split regressed boxes into during roialign
@@ -117,7 +117,7 @@ def faster_rcnn_config():
     #training parameters
     train_args = {'train_shape': (224, 224, 3), #shape of training instances
                   'max_anchors': 256, #maximum number of negative anchors to sample per epoch
-                  'np_ratio': 0.5, #largest ratio of negative : positive anchors per batch
+                  'np_ratio': 1.0, #largest ratio of negative : positive anchors per batch
                   'lmbda': 10.0, #weighting factor for region-proposal network regression loss
                   'hard_fraction': 0.0} #fraction of sampled negative anchors that are hard
 
@@ -303,6 +303,7 @@ class FasterRCNN(tf.keras.Model):
     
     @classmethod
     def from_config(cls, config):
+        #defining this function is required to support keras restore
         return cls(**config)
     
     
@@ -653,13 +654,13 @@ class FasterRCNN(tf.keras.Model):
         output = self.rpnetwork(features, training=False)[0]
  
         #evaluate rpn - calculate objectness predictions and labels
-        rpn_obj_positive = tf.nn.softmax(map_outputs(output, positive_anchors,
-                                                     self.anchor_px, self.field))
-        rpn_obj_negative = tf.nn.softmax(map_outputs(output, negative_anchors,
-                                                     self.anchor_px, self.field))
-        rpn_obj_labels = tf.concat([tf.ones(tf.shape(rpn_obj_positive)[0], tf.uint8),
-                                    tf.zeros(tf.shape(rpn_obj_negative)[0], tf.uint8)],
-                                   axis=0)
+        positive_obj = tf.nn.softmax(map_outputs(output, positive_anchors,
+                                                 self.anchor_px, self.field))
+        negative_obj = tf.nn.softmax(map_outputs(output, negative_anchors,
+                                                 self.anchor_px, self.field))
+        obj_labels = tf.concat([tf.ones(tf.shape(positive_obj)[0], tf.uint8),
+                                tf.zeros(tf.shape(negative_obj)[0], tf.uint8)],
+                                axis=0)
         
         #select positive rpn proposals for nms and roialign
         rpn_boxes_pred, rpn_obj_pred, _ = self.threshold(rpn_boxes, rpn_obj, self.tau)
@@ -695,10 +696,10 @@ class FasterRCNN(tf.keras.Model):
         align_ious = tf.reduce_max(align_ious, axis=1)
         
         #update objectness binary classification metrics
-        obj_metrics = self._update_objectness_metrics(tf.concat([rpn_obj_positive,
-                                                                 rpn_obj_negative],
+        obj_metrics = self._update_objectness_metrics(tf.concat([positive_obj,
+                                                                 negative_obj],
                                                                 axis=0),
-                                                      rpn_obj_labels)
+                                                      obj_labels)
         
         #update regression metrics
         reg_metrics = self._update_regression_metrics(boxes,
