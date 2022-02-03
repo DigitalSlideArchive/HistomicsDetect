@@ -249,7 +249,7 @@ class FasterRCNN(tf.keras.Model):
         self.anchor_sizes = anchor_sizes
         
         #build backbone, rpn, and terminal network
-        backbone, preprocessor = pretrained(backbone_args['name'], train_args['train_shape'])
+        backbone, preprocessor = pretrained(backbone_args['name'])
         self.backbone = residual(backbone, preprocessor, backbone_args['blocks'], backbone_args['stride'])
         self.rpnetwork = rpn(self.backbone.output.shape[-1], len(anchor_sizes), **rpn_args)
         self.fastrcnn = fast_rcnn(self.backbone.output.shape[-1], **frcnn_args)        
