@@ -2,18 +2,15 @@ from histomics_detect.networks.transfer_layers import transfer_layers
 import tensorflow as tf
 
 
-def pretrained(name, train_shape=(224, 224, 3)):
+def pretrained(name):
     """
     Loads backbone keras model from tf.keras.applications.
     
     Parameters
     ----------
     name : string
-        Name of pre-trained network to load. One of 'resnet50', 'resnet101',
-        or 'resnet152'. Case insensitive.
-    train_shape : int
-        Size of input images used for training. Network can be modified later to 
-        alter input shape.
+        Name of pre-trained network to load. Case insensitive.
+
     Returns
     -------
     model : tf.keras.Model
@@ -25,34 +22,33 @@ def pretrained(name, train_shape=(224, 224, 3)):
     if str.lower(name) == 'resnet50':
         model = tf.keras.applications.resnet.ResNet50(
             include_top=False, weights='imagenet', input_tensor=None,
-            input_shape=train_shape, pooling=None)
+            input_shape=(None, None, 3), pooling=None)
         preprocessor = tf.keras.applications.resnet.preprocess_input
     elif str.lower(name) == 'resnet101':
         model = tf.keras.applications.resnet.ResNet101(
             include_top=False, weights='imagenet', input_tensor=None,
-            input_shape=train_shape, pooling=None)
+            input_shape=(None, None, 3), pooling=None)
         preprocessor = tf.keras.applications.resnet.preprocess_input
     elif str.lower(name) == 'resnet152':
         model = tf.keras.applications.resnet.ResNet152(
             include_top=False, weights='imagenet', input_tensor=None,
-            input_shape=train_shape, pooling=None)
+            input_shape=(None, None, 3), pooling=None)
         preprocessor = tf.keras.applications.resnet.preprocess_input
     elif str.lower(name) == 'resnet50v2':
         model = tf.keras.applications.resnet_v2.ResNet50V2(
             include_top=False, weights='imagenet', input_tensor=None,
-            input_shape=train_shape, pooling=None)
+            input_shape=(None, None, 3), pooling=None)
         preprocessor = tf.keras.applications.resnet_v2.preprocess_input
     elif str.lower(name) == 'resnet101v2':
         model = tf.keras.applications.resnet_v2.ResNet101V2(
             include_top=False, weights='imagenet', input_tensor=None,
-            input_shape=train_shape, pooling=None)
+            input_shape=(None, None, 3), pooling=None)
         preprocessor = tf.keras.applications.resnet_v2.preprocess_input
     elif str.lower(name) == 'resnet152v2':
         model = tf.keras.applications.resnet_v2.ResNet152V2(
             include_top=False, weights='imagenet', input_tensor=None,
-            input_shape=train_shape, pooling=None)
+            input_shape=(None, None, 3), pooling=None)
         preprocessor = tf.keras.applications.resnet_v2.preprocess_input
-        
     else:
         raise ValueError("Network name not recognized")
     
