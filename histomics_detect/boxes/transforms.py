@@ -185,7 +185,8 @@ def _unstack_box_array(boxes):
 
 
 @tf.function
-def filter_edge_boxes(boxes, width: float, height: float, margin: float = 5.0):
+def filter_edge_boxes(boxes, width: float, height: float, margin: float = 32.0,
+                      centroids=tf.constant(True, tf.bool)):
     """
     Filters out boxes that cross the margin of the image boundary.
 
@@ -195,16 +196,22 @@ def filter_edge_boxes(boxes, width: float, height: float, margin: float = 5.0):
 
     Parameters
     ----------
-    margin: float
-        offset from the border of the image border where boxes that overlap are removed
-    height: float
-        height of the image
-    width: float
-        width of the image
     boxes: tensor (float32)
-        M x 4 tensor where each row contains the x,y location of the upper left
-        corner of a ground truth box and its width and height in that order.
-
+        M x 4 tensor of bounding boxes where each row contains the x,y location of 
+        the upper left corner of a ground truth box and its width and height in that 
+        order.
+    width: float
+        Width of the image that boxes originate from.
+    height: float
+        Height of the image that boxes originate from. 
+    margin: float
+        Offset from the border of the image border where boxes that overlap are 
+        removed. Default value 5.
+    centroid: boolean.
+        If True, the filtering removes boxes whose centroids fall within the margin. 
+        If False, any box intersecting the margin will be filtered. Default value 
+        True.
+        
     Returns
     -------
     filtered_boxes: tensor (float32)
@@ -215,22 +222,30 @@ def filter_edge_boxes(boxes, width: float, height: float, margin: float = 5.0):
         M length tensor where true indicates box was retained.
     """
 
+    # cast inputs to float32
     margin = tf.cast(margin, tf.float32)
     width = tf.cast(width, tf.float32)
     height = tf.cast(height, tf.float32)
 
     # unstack box columns
     x, y, w, h = _unstack_box_array(boxes)
-    x2 = x + w
-    y2 = y + h
 
-    # condition that box will be kept
-    min_cond = tf.logical_and(x >= margin, y >= margin)
-    max_cond = tf.logical_and(x2 <= (width-margin), y2 <= (height-margin))
-    mask = tf.logical_and(min_cond, max_cond)
+    # condition for boxes to be kept
+    def box(x, y, w, h):
+        min_cond = tf.logical_and(x >= margin, y >= margin)
+        max_cond = tf.logical_and(x+w <= (width-margin), y+h <= (height-margin))
+        return tf.logical_and(min_cond, max_cond)        
+    
+    # condition for centroids to be kept
+    def centroid(x, y, w, h):
+        min_cond = tf.logical_and(x+w/2 >= margin, y+h/2 >= margin)
+        max_cond = tf.logical_and(x+w/2 <= (width-margin), y+h/2 <= (height-margin))
+        return tf.logical_and(min_cond, max_cond) 
+    
+    # generate mask
+    mask = tf.cond(centroids, lambda: centroid(x,y,w,h), lambda: box(x,y,w,h))
 
     # stack columns and collect boxes that fulfill the condition
-
     filtered_boxes = tf.gather_nd(tf.stack([x, y, w, h], axis=1), tf.where(mask))
     
     return filtered_boxes, mask
