@@ -62,7 +62,7 @@ def create_anchors(anchor_px, field, width, height, filter_boxes=True):
 
     # remove anchors that cross the boundary
     if filter_boxes:
-        anchors, _ = filter_edge_boxes(anchors, width, height, 0)
+        anchors, _ = filter_edge_boxes(anchors, width, height, 0, tf.constant(False, tf.bool))
 
 
     return anchors
