@@ -42,10 +42,11 @@ def validate_model(ds_validation_roi: tf.data.Dataset, model: LearningNMS, faste
                 rpn_boxes_final = faster_model.align(filtered_boxes, features, faster_model.field, faster_model.pool,
                                                      faster_model.tiles)
 
-                boxes = filter_edge_boxes(boxes, tf.shape(rgb)[1], tf.shape(rgb)[0], 32)
+                boxes = filter_edge_boxes(boxes, tf.shape(rgb)[1], tf.shape(rgb)[0], 32,
+                                          tf.constant(False, tf.bool))
 
                 rpn_boxes_final, condition = filter_edge_boxes(rpn_boxes_final, tf.shape(rgb)[1], tf.shape(rgb)[0], 32,
-                                                               True)
+                                                               tf.constant(False, tf.bool))
                 scores = tf.reshape(tf.gather(scores, tf.where(condition)), (-1, 1))
 
                 if tf.size(rpn_boxes_final) > 0:
