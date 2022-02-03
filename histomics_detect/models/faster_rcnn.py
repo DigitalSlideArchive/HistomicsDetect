@@ -251,8 +251,8 @@ class FasterRCNN(tf.keras.Model):
         #build backbone, rpn, and terminal network
         backbone, preprocessor = pretrained(backbone_args['name'], train_args['train_shape'])
         self.backbone = residual(backbone, preprocessor, backbone_args['blocks'], backbone_args['stride'])
-        self.rpnetwork = rpn(backbone.output.shape[-1], len(anchor_sizes), **rpn_args)
-        self.fastrcnn = fast_rcnn(backbone.output.shape[-1], **frcnn_args)        
+        self.rpnetwork = rpn(self.backbone.output.shape[-1], len(anchor_sizes), **rpn_args)
+        self.fastrcnn = fast_rcnn(self.backbone.output.shape[-1], **frcnn_args)        
 
         #capture field, anchor sizes, loss mixing
         self.field = tf.cast(field_size(self.backbone), tf.float32)
