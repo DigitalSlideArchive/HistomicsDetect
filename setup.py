@@ -11,7 +11,7 @@ setuptools.setup(
     description='A TensorFlow 2 package for cell detection',
     long_description=long_description,
     long_description_content_type='text/x-rst',
-    url='https://github.com/CancerDataScience/histomics_detect',
+    url='https://github.com/DigitalSlideArchive/HistomicsDetect',
     packages=setuptools.find_packages(exclude=['tests']),
     package_dir={
         'histomics_detect': 'histomics_detect',
@@ -23,7 +23,7 @@ setuptools.setup(
       'Pillow',
       'pooch',
       'pyyaml',
-      'scipy',        
+      'scipy',
       'tensorflow-gpu>=2.4'],
     license='Apache Software License 2.0',
     keywords='histomics_detect',
