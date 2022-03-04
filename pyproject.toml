@@ -1,6 +1,35 @@
 [build-system]
-requires = [
-    "setuptools>=42",
-    "wheel"
+requires = ["flit_core >=3.4,<4"]
+build-backend = "flit_core.buildapi"
+
+[project]
+name = "histomics_detect"
+readme = "README.rst"
+requires-python = ">=3.6"
+authors = [{name = "Lee A. D. Cooper", email = "lee.cooper@northwestern.edu"}]
+maintainers = [{name = "Lee A. D. Cooper", email = "lee.cooper@northwestern.edu"}]
+keywords = ["histomics_detect", "HistomicsDetect"]
+classifiers=[
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Apache Software License",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Image Processing",
+    "Topic :: Scientific/Engineering :: Image Recognition",
 ]
-build-backend = "setuptools.build_meta"
+dependencies = [
+    "matplotlib",
+    "numpy",
+    "pandas",
+    "Pillow",
+    "pooch",
+    "pyyaml",
+    "scipy",
+    "tensorflow-gpu>=2.4",
+]
+dynamic = ["version", "description"]
+
+[project.urls]
+Source = "https://github.com/DigitalSlideArchive/HistomicsDetect"
+
+[project.scripts]
+flit = "flit:main"
