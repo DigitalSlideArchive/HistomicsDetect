@@ -37,7 +37,7 @@ def assemble_single_neighborhood(anchor_id: int, interpolated: tf.Tensor, neighb
     S: size of neighborhood
     N: number of predictions
     D: size of a single prediction
-    
+
     Parameters
     ----------
     use_joint_features: bool

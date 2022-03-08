@@ -5,7 +5,7 @@ import tensorflow as tf
 def pretrained(name):
     """
     Loads backbone keras model from tf.keras.applications.
-    
+
     Parameters
     ----------
     name : string
@@ -18,7 +18,7 @@ def pretrained(name):
     preprocessor : function
         Function used for transforming model inputs.
     """
-    
+
     if str.lower(name) == 'resnet50':
         model = tf.keras.applications.resnet.ResNet50(
             include_top=False, weights='imagenet', input_tensor=None,
@@ -51,7 +51,7 @@ def pretrained(name):
         preprocessor = tf.keras.applications.resnet_v2.preprocess_input
     else:
         raise ValueError("Network name not recognized")
-    
+
     return model, preprocessor
 
 
@@ -60,7 +60,7 @@ def residual(model, preprocessor, blocks, stride=None):
     Creates a feature extraction backbone from a tf.keras.applications resnet model.
     Allows user to select the number of residual blocks to keep and to set the convolution
     stride. Optionally merges the model with a preprocessor function.
-        
+
     Parameters
     ----------
     model : tf.keras.Model
@@ -72,7 +72,7 @@ def residual(model, preprocessor, blocks, stride=None):
         > blocks are truncated from the output model.
     stride : int
         The desired stride for the first convolution. Default value None does not alter stride.
-    
+
     Returns
     -------
     backbone : tf.keras.Model
@@ -121,15 +121,15 @@ def residual(model, preprocessor, blocks, stride=None):
     conv = tf.keras.layers.serialize(model.layers[2])
     conv['config']['strides'] = (stride, stride)
     conv = tf.keras.layers.deserialize(conv)
-    
+
     #apply preprocessor
     normalized = preprocessor(input)
 
     #compose model
     features = transfer_layers(model.layers[3:terminal+1],
-                                   'b', conv(padding(normalized)))   
+                                   'b', conv(padding(normalized)))
     backbone = tf.keras.Model(inputs=input, outputs=features)
-    
+
     #set weights for first convolution
     for (i, layer) in enumerate(backbone.layers):
         if layer.name == name:

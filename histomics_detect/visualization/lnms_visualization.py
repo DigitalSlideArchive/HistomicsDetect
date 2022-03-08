@@ -77,11 +77,11 @@ def plot_inference(rgb: tf.Tensor, boxes: tf.Tensor, nms_output: tf.Tensor, rpn_
         negative_boxes = tf.reshape(tf.gather(boxes, fn_list), (-1, 4))
 
         if filter_edge:
-            negative_boxes, _ = filter_edge_boxes(negative_boxes, tf.shape(rgb)[1], tf.shape(rgb)[0], 
+            negative_boxes, _ = filter_edge_boxes(negative_boxes, tf.shape(rgb)[1], tf.shape(rgb)[0],
                                                   filter_margin, tf.constant(False, tf.bool))
-            positive_pred, _ = filter_edge_boxes(positive_pred, tf.shape(rgb)[1], tf.shape(rgb)[0], 
+            positive_pred, _ = filter_edge_boxes(positive_pred, tf.shape(rgb)[1], tf.shape(rgb)[0],
                                                  filter_margin, tf.constant(False, tf.bool))
-            negative_pred, _ = filter_edge_boxes(negative_pred, tf.shape(rgb)[1], tf.shape(rgb)[0], 
+            negative_pred, _ = filter_edge_boxes(negative_pred, tf.shape(rgb)[1], tf.shape(rgb)[0],
                                                  filter_margin, tf.constant(False, tf.bool))
 
     except:

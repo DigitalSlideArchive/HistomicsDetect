@@ -5,7 +5,7 @@ def fast_rcnn(features, units=[4096, 4096], activations=['relu', 'relu'], pool=2
     """
     Produces the terminal network used to refine regressions from the region-proposal network
     and to optionally classify the objects.
-    
+
     Parameters
     ----------
     features : int
@@ -15,9 +15,9 @@ def fast_rcnn(features, units=[4096, 4096], activations=['relu', 'relu'], pool=2
         The number of units in each dense layer. Default value [4096, 4096].
     activations : array_like (string)
         A list of strings defining the activations to use in the dense layers.
-        Must be same length as dense. Default value ['relu', 'relu'].    
+        Must be same length as dense. Default value ['relu', 'relu'].
     pool : int
-        pool^2 is the number of locations to interpolate features at within 
+        pool^2 is the number of locations to interpolate features at within
         each tile. Default value 2.
     tiles : int
         tile^2 is the number of tiles that each regressed bounding box is divided
@@ -28,9 +28,9 @@ def fast_rcnn(features, units=[4096, 4096], activations=['relu', 'relu'], pool=2
     fastrcnn : tf.keras.Model
         .
     """
-    
+
     #generates fast RCNN model used in second regression that follows region proposal network.
-    
+
     #create input layer
     fastrcnn_input = tf.keras.Input(shape=(pool*tiles, pool*tiles, features))
 
@@ -41,18 +41,15 @@ def fast_rcnn(features, units=[4096, 4096], activations=['relu', 'relu'], pool=2
     pooled = tf.reshape(pooled, (tf.shape(pooled)[0], tiles*tiles*features))
 
     #fully connected layers
-    for i, (unit, activation) in enumerate(zip(units, activations)):
-        if i == 0:
-            layer_input = pooled
-        else:
-            layer_input = x
-        x = tf.keras.layers.Dense(unit, activation=activation)(layer_input)
+    x = pooled
+    for unit, activation in zip(units, activations):
+        x = tf.keras.layers.Dense(unit, activation=activation)(x)
 
     #final layer to generate parameterized regression prediction
     regression_align = tf.keras.layers.Dense(4, activation='linear')(x)
-    
+
     #create model
     fastrcnn = tf.keras.Model(inputs=fastrcnn_input,
                               outputs=[regression_align])
-    
+
     return fastrcnn

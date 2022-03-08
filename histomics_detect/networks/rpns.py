@@ -7,7 +7,7 @@ def rpn(features, n_anchors, kernels=[3], dimensions=[256],
     Produces a region proposal network that consumes 3D feature maps from the
     backbone, and produces objectness scores and box regressions used for
     region proposal.
-    
+
     Parameters
     ----------
     features : int
@@ -17,35 +17,31 @@ def rpn(features, n_anchors, kernels=[3], dimensions=[256],
     kernels : array_like (int)
         A list or array defining the number of convolutional layers and kernel sizes
         of each layer. A value of [3, 2] will produce a two-layer cascade, with the
-        first layer having 3x3 kernels and the second layer having 2x2 kernels. These 
+        first layer having 3x3 kernels and the second layer having 2x2 kernels. These
         kernels convolve over the 3D feature map where the grid spacing corresponds to
         the backbone field size. Default value [3].
     dimensions : array_like (int)
-        A list or array defining the number of kernels in each convolutional layer. 
+        A list or array defining the number of kernels in each convolutional layer.
         Must be same length as kernels. Default value [256].
     activations : array_like (string)
         A list of strings defining the activations to use in each convolution layer.
         Must be same length as kernels. Default value ['relu'].
-    
+
     Returns
     -------
     rpn : tf.keras.Model
         The region proposal network. Consumes a 3D tensor and produces objectness
         scores and box regressions.
     """
-    
+
     #create input layer
     rpn_input = tf.keras.Input(shape=(None, None, features))
 
     #build region-proposal convolutional layers
-    for i, (kernel, dimension, activation) in \
-        enumerate(zip(kernels, dimensions, activations)):
-        if i == 0:
-            layer_input = rpn_input
-        else:
-            layer_input = x  
+    x = rpn_input
+    for dimension, kernel, activation in zip(dimensions, kernels, activations):
         x = tf.keras.layers.Conv2D(dimension, kernel, padding='same',
-                                   activation=activation)(layer_input)
+                                   activation=activation)(x)
 
     #build regression and objectness outputs using 1D convolutions
     regression = tf.keras.layers.Conv2D(4*n_anchors, 1, padding='same',
@@ -54,7 +50,7 @@ def rpn(features, n_anchors, kernels=[3], dimensions=[256],
                                         activation='linear')(x)
 
     #create rpn model
-    rpn = tf.keras.Model(inputs=rpn_input, 
+    rpn = tf.keras.Model(inputs=rpn_input,
                          outputs=[objectness, regression])
 
     return rpn

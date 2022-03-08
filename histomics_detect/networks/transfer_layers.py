@@ -4,8 +4,8 @@ import tensorflow as tf
 def transfer_layers(layers, prefix, input):
     #This function copies layers from the input models into a single
     #model with appropriate name scopes to help separate variables by
-    #shared, predictor, and discriminator sub-networks. Supports feed 
-    #forward networks with skip layers and branching architectures. 
+    #shared, predictor, and discriminator sub-networks. Supports feed
+    #forward networks with skip layers and branching architectures.
     #layers - a list of tf.keras.layers
     #prefix - string used for scoping variable and layer names
     #input - optional model input from other subnetwork, if 'None'
@@ -23,7 +23,7 @@ def transfer_layers(layers, prefix, input):
 
     #iterate through layers, transferring configurations and weights
     for i, layer in enumerate(layers):
-        
+
         #layer output name is key, index in 'output' is value
         history[layer.output.name] = i
 

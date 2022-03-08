@@ -5,7 +5,7 @@ import tensorflow as tf
 def parameterize(positive, boxes):
     """Transforms boxes that are matched to an anchor to a parameterized format
     used by the regression loss.
-        
+
     Parameters
     ----------
     positive: tensor (float32)
@@ -15,7 +15,7 @@ def parameterize(positive, boxes):
     boxes: tensor (float32)
         N x 4 tensor where each row contains the x,y location of the upper left
         corner of a ground truth box and its width and height in that order.
-        
+
     Returns
     -------
     parameterized: tensor (float32)
@@ -40,11 +40,11 @@ def parameterize(positive, boxes):
 @tf.function
 def unparameterize(parameterized, positive):
     """Transforms parameterized boxes to an un-parameterized [x,y,w,h] format.
-    
+
     Given the matched and row-aligned tensors containing parameterized boxes and
     corresponding positive anchors, reverts the parameterization so that boxes
     can be used in IoU calculations or visualization.
-        
+
     Parameters
     ----------
     parameterized: tensor (float32)
@@ -53,14 +53,14 @@ def unparameterize(parameterized, positive):
         N x 5 tensor of anchors matched to ground truth boxes. Each row contains
         the x,y upper left corner, width, height, and matched box index for one
         anchor.
-        
+
     Returns
     -------
     boxes: tensor (float32)
         N x 4 tensor where each row contains the x,y location of the upper left
         corner of a ground truth box and its width and height in that order.
     """
-    
+
     #convert from parameterized representation to a box representation
 
     #transform predictions back to box format
@@ -73,21 +73,21 @@ def unparameterize(parameterized, positive):
     boxes = tf.stack([x, y, w, h], axis=1)
 
     return boxes
-  
+
 
 @tf.function
 def tf_box_transform(boxes):
     """Transform bounding boxes to TF format.
-    
+
     Transforms the [x,y,w,h] format for bounding boxes used throughout this package
     to the [x,y,x+w-1,x+h-1] expected by TensorFlow.
-    
+
     Parameters
     ----------
     boxes: tensor (float32)
         N x 4 tensor where each row contains the x,y location of the upper left
         corner of a ground truth box and its width and height in that order.
-        
+
     Returns
     -------
     transformed: tensor (float32)
@@ -102,15 +102,15 @@ def tf_box_transform(boxes):
     transformed = tf.stack([x, y, tf.add(x, w-1), tf.add(y, h-1)], axis=1)
 
     return transformed
-    
+
 
 @tf.function
 def clip_boxes(boxes, width, height):
     """Clips boxes that extend beyond a region of interest boundary.
-    
+
     Transforms each box so that the minimum x/y coordinates are zero and the maximum
     coordinates are width/height.
-    
+
     Parameters
     ----------
     boxes: tensor (float32)
@@ -120,14 +120,14 @@ def clip_boxes(boxes, width, height):
         Width of region of interest to clip boxes to.
     height: float32
         Height of region of interest to clip boxes to.
-        
+
     Returns
     -------
     clipped: tensor (float32)
         Same as input but with boxes clipped to region of interest.
-    """    
-    
-    
+    """
+
+
     #clips bounding boxes in [x,y,w,h] format to image dimensions
 
     # unstack box columns
@@ -150,31 +150,31 @@ def clip_boxes(boxes, width, height):
 @tf.function
 def _unstack_box_array(boxes):
     """Unstacks the x,y,w,h bounding box parameters from the stacked input.
-    
+
     Parameters
     ----------
     boxes: tensor (float32)
         N x 4 tensor where each row contains the x,y location of the upper left
         corner of a ground truth box and its width and height in that order.
-        
+
     Returns
     -------
     x: tensor (float32)
         N-length tensor of x coordinates of upper left corner of bounding boxes.
     y: tensor (float32)
-        N-length tensor of y coordinates of upper left corner of bounding boxes.    
+        N-length tensor of y coordinates of upper left corner of bounding boxes.
     w: tensor (float32)
         N-length tensor of bounding boxe widths.
     h: tensor (float32)
         N-length tensor of bounding boxe heights.
-    """    
-    
-    
-    #unstacks columns from bounding box array. use gather instead of unstack, 
+    """
+
+
+    #unstacks columns from bounding box array. use gather instead of unstack,
     #because input could have 5 columns (arrays containing 'positive' anchors that
     #have been matched to bounding boxes can contain a fifth column that is the
-    #index of the matched bounding box. 
-  
+    #index of the matched bounding box.
+
     #gather first four columns
     x = tf.gather(boxes, 0, axis=1)
     y = tf.gather(boxes, 1, axis=1)
@@ -190,28 +190,28 @@ def filter_edge_boxes(boxes, width: float, height: float, margin: float = 32.0,
     """
     Filters out boxes that cross the margin of the image boundary.
 
-    Boxes are retained if all the points are within the image boundary inset by the 
-    margin parameter. Ex. given a box with top left and bottom right corners [[2, 2], 
+    Boxes are retained if all the points are within the image boundary inset by the
+    margin parameter. Ex. given a box with top left and bottom right corners [[2, 2],
     [9, 9] for a image with size 10, 10 this box is not filtered if margin <= 1.
 
     Parameters
     ----------
     boxes: tensor (float32)
-        M x 4 tensor of bounding boxes where each row contains the x,y location of 
-        the upper left corner of a ground truth box and its width and height in that 
+        M x 4 tensor of bounding boxes where each row contains the x,y location of
+        the upper left corner of a ground truth box and its width and height in that
         order.
     width: float
         Width of the image that boxes originate from.
     height: float
-        Height of the image that boxes originate from. 
+        Height of the image that boxes originate from.
     margin: float
-        Offset from the border of the image border where boxes that overlap are 
+        Offset from the border of the image border where boxes that overlap are
         removed. Default value 5.
     centroid: boolean.
-        If True, the filtering removes boxes whose centroids fall within the margin. 
-        If False, any box intersecting the margin will be filtered. Default value 
+        If True, the filtering removes boxes whose centroids fall within the margin.
+        If False, any box intersecting the margin will be filtered. Default value
         True.
-        
+
     Returns
     -------
     filtered_boxes: tensor (float32)
@@ -234,18 +234,18 @@ def filter_edge_boxes(boxes, width: float, height: float, margin: float = 32.0,
     def box(x, y, w, h):
         min_cond = tf.logical_and(x >= margin, y >= margin)
         max_cond = tf.logical_and(x+w <= (width-margin), y+h <= (height-margin))
-        return tf.logical_and(min_cond, max_cond)        
-    
+        return tf.logical_and(min_cond, max_cond)
+
     # condition for centroids to be kept
     def centroid(x, y, w, h):
         min_cond = tf.logical_and(x+w/2 >= margin, y+h/2 >= margin)
         max_cond = tf.logical_and(x+w/2 <= (width-margin), y+h/2 <= (height-margin))
-        return tf.logical_and(min_cond, max_cond) 
-    
+        return tf.logical_and(min_cond, max_cond)
+
     # generate mask
     mask = tf.cond(centroids, lambda: centroid(x,y,w,h), lambda: box(x,y,w,h))
 
     # stack columns and collect boxes that fulfill the condition
     filtered_boxes = tf.gather_nd(tf.stack([x, y, w, h], axis=1), tf.where(mask))
-    
+
     return filtered_boxes, mask

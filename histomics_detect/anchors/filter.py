@@ -6,14 +6,14 @@ import tensorflow as tf
 def filter_anchors(boxes, anchors, alpha=0.7, beta=0.3, gamma=0.3):
     """Compares anchors to ground truth to determine positive and negative
     anchors.
-    
-    This function uses multiple criteria for intersection-over-union (IoU) 
-    with ground truth to label anchors as either positive or negative. 
-    A positive anchor is any anchor that has over 'alpha' IoU with any ground 
-    truth object, or that is the max IoU anchor for a ground truth object 
-    with IoU at least 'beta'. A negative anchor is any anchor where the max 
+
+    This function uses multiple criteria for intersection-over-union (IoU)
+    with ground truth to label anchors as either positive or negative.
+    A positive anchor is any anchor that has over 'alpha' IoU with any ground
+    truth object, or that is the max IoU anchor for a ground truth object
+    with IoU at least 'beta'. A negative anchor is any anchor where the max
     IoU with ground truth objects is less than 'gamma'.
-        
+
     Parameters
     ----------
     boxes: tensor (float32)
@@ -21,8 +21,8 @@ def filter_anchors(boxes, anchors, alpha=0.7, beta=0.3, gamma=0.3):
         corner of a ground truth box and its width and height in that order.
     anchors: tensor (float32)
         M x 4 tensor anchor positions organized in a dense grid over the image
-        space. Each row contains the x,y upper left corner of the anchor in pixel 
-        units relative in the image coordinate frame, and the anchor width and 
+        space. Each row contains the x,y upper left corner of the anchor in pixel
+        units relative in the image coordinate frame, and the anchor width and
         height.
     alpha: float32
         Threshold for calling an anchor positive based on maximum IoU with any
@@ -32,12 +32,12 @@ def filter_anchors(boxes, anchors, alpha=0.7, beta=0.3, gamma=0.3):
         anchor for a single ground truth object.
     gamma: float32
         Threshold for calling anchors negative.
-        
+
     Returns
     -------
     positive: tensor (float32)
         M x 4 tensor of positive anchor positions satisfying IoU criteria
-        with some ground truth object. Each row contains the x,y upper left corner 
+        with some ground truth object. Each row contains the x,y upper left corner
         of the anchor in pixel units relative in the image coordinate frame, and
         the anchor width and height.
     negative: tensor (float32)

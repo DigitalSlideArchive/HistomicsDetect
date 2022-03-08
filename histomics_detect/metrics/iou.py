@@ -3,10 +3,10 @@ import tensorflow as tf
 def iou(source, target):
     """Calculates intersection over union (IoU) and intersection areas for two sets
     of objects with box representations.
-    
+
     This uses simple arithmetic and outer products to calculate the IoU and intersections
     between all pairs without looping.
-        
+
     Parameters
     ----------
     source: tensor (float32)
@@ -17,7 +17,7 @@ def iou(source, target):
         N x 4 tensor where each row contains the x,y location of the upper left
         corner of a box and its width and height in that order. Typically the
         ground truth.
-        
+
     Returns
     -------
     iou: tensor (float32)
@@ -26,7 +26,7 @@ def iou(source, target):
         M x N tensor containing area overlaps between source and target boxes
         in pixels.
     """
-    
+
     #split into corners and sizes
     xs, ys, ws, hs = tf.split(source, 4, axis=1)
     xt, yt, wt, ht = tf.split(target, 4, axis=1)
@@ -53,11 +53,11 @@ def iou(source, target):
 
 def _greedy_iou_mapping_iter(i, ious, source_mask, target_mask, matches):
     """Performs one iteration of greedy IoU mapping.
-    
-    This is the loop body of the greedy IoU mapping algorithm. This identifies the 
-    best match having the highest IoU and removes the corresponding prediction and 
+
+    This is the loop body of the greedy IoU mapping algorithm. This identifies the
+    best match having the highest IoU and removes the corresponding prediction and
     ground truth element from future consideration in matching.
-    
+
     Parameters
     ----------
     i: int32
@@ -69,12 +69,12 @@ def _greedy_iou_mapping_iter(i, ious, source_mask, target_mask, matches):
     source_mask: tensor (bool)
         1D M-length tensor where unmatched predictions are represented by 'True'.
     target_mask: tensor (bool)
-        1D M-length tensor where unmatched ground truth elements are represented 
-        by 'True'.    
+        1D M-length tensor where unmatched ground truth elements are represented
+        by 'True'.
     matches: tensor (float32)
         2D tensor where each row represents a match, containing the indices of
         the matched prediction and ground truth element in that order.
-        
+
     Returns
     -------
     i: int32
@@ -111,12 +111,12 @@ def _greedy_iou_mapping_iter(i, ious, source_mask, target_mask, matches):
                                               [tf.constant(False)])
     target_mask = tf.tensor_scatter_nd_update(target_mask, [target_index],
                                               [tf.constant(False)])
-  
+
     #write (source, target) to TensorArray
     matches = matches.write(i, tf.concat([tf.cast(source_index, tf.float32),
                                           tf.cast(target_index, tf.float32),
                                           [max]], axis=0))
-  
+
     #update index
     i = i + 1
 
@@ -125,11 +125,11 @@ def _greedy_iou_mapping_iter(i, ious, source_mask, target_mask, matches):
 
 def greedy_iou_mapping(ious, min_iou):
     """Calculates greedy IoU mapping between predictions and ground truth.
-    
+
     Uses intersection-over-union scores to compute a greedy mapping between
     ground truth and predicted objects. Greedy mapping can produce suboptimal
     results compared to the Kuhn–Munkres algorithm since matching is greedy.
-    
+
     Parameters
     ----------
     ious: tensor (float32)
@@ -139,7 +139,7 @@ def greedy_iou_mapping(ious, min_iou):
     min_iou: float32
         Minimum IoU threshold for defining a match between a regression
         prediction and a ground truth box.
-        
+
     Returns
     -------
     precision: float32
