@@ -1,6 +1,6 @@
 """A TensorFlow 2 package for cell detection"""
 
-__version__ = "0.0.1"
+__version__ = "0.0.2"
 
 """
 
