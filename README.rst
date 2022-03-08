@@ -2,16 +2,19 @@
 histomics_detect
 ================================================
 
-`histomics_detect`_ is a Python package for the building and evaluating cell detection 
+`histomics_detect`_ is a Python package for the building and evaluating cell detection
 models. It provides data loading, data augmentation, performance metrics, model building,
 visualization, and other utility functions based on Keras and TensorFlow2.
 
-To get started, clone to your local system and install in developer mode::
+To get started, install it to Python or into a Python virtual environment::
 
-$pip install -e ./histomics_detect
+$pip install histomics_detect
 
-To run in Docker, mount the folder containing the cloned repository and then pip install
-inside the running container.
+To run in Docker, pip install inside the running container.
 
-See /histomics_detect/example/ for a Jupyter notebook demonstrating how to build a FasterRCNN 
-model using histomics_detect.
+Developer source code can be downloaded with::
+
+$git clone https://github.com/DigitalSlideArchive/HistomicsDetect.git
+
+See https://github.com/DigitalSlideArchive/HistomicsDetect/tree/main/example for a Jupyter
+notebook demonstrating how to build a FasterRCNN model using histomics_detect.
