@@ -12,12 +12,25 @@ from histomics_detect.models.lnms_model import LearningNMS
 from histomics_detect.models.compression_network import CompressionNetwork
 
 
-def plot_inference(rgb: tf.Tensor, boxes: tf.Tensor, nms_output: tf.Tensor, rpn_boxes: tf.Tensor,
-                   save_fig: bool = False, fig_path: str = 'plot_of_inference.png', filter_edge: bool = False,
-                   filter_margin: int = 32, threshold: float = 0.5, figsize: Tuple[int, int] = (20, 20),
-                   gt_colors: Tuple[str, str] = ('g', 'r'), pred_colors: Tuple[str, str] = ('g', 'r'),
-                   pred_size: int = 300, print_prediction_numbers: bool = True, show_axis: bool = True,
-                   ax=plt, is_multi: bool = False) -> None:
+def plot_inference(
+    rgb: tf.Tensor,
+    boxes: tf.Tensor,
+    nms_output: tf.Tensor,
+    rpn_boxes: tf.Tensor,
+    save_fig: bool = False,
+    fig_path: str = "plot_of_inference.png",
+    filter_edge: bool = False,
+    filter_margin: int = 32,
+    threshold: float = 0.5,
+    figsize: Tuple[int, int] = (20, 20),
+    gt_colors: Tuple[str, str] = ("g", "r"),
+    pred_colors: Tuple[str, str] = ("g", "r"),
+    pred_size: int = 300,
+    print_prediction_numbers: bool = True,
+    show_axis: bool = True,
+    ax=plt,
+    is_multi: bool = False,
+) -> None:
     """
     calculates the statistic of previously run output and plots it
 
@@ -77,12 +90,15 @@ def plot_inference(rgb: tf.Tensor, boxes: tf.Tensor, nms_output: tf.Tensor, rpn_
         negative_boxes = tf.reshape(tf.gather(boxes, fn_list), (-1, 4))
 
         if filter_edge:
-            negative_boxes, _ = filter_edge_boxes(negative_boxes, tf.shape(rgb)[1], tf.shape(rgb)[0],
-                                                  filter_margin, tf.constant(False, tf.bool))
-            positive_pred, _ = filter_edge_boxes(positive_pred, tf.shape(rgb)[1], tf.shape(rgb)[0],
-                                                 filter_margin, tf.constant(False, tf.bool))
-            negative_pred, _ = filter_edge_boxes(negative_pred, tf.shape(rgb)[1], tf.shape(rgb)[0],
-                                                 filter_margin, tf.constant(False, tf.bool))
+            negative_boxes, _ = filter_edge_boxes(
+                negative_boxes, tf.shape(rgb)[1], tf.shape(rgb)[0], filter_margin, tf.constant(False, tf.bool)
+            )
+            positive_pred, _ = filter_edge_boxes(
+                positive_pred, tf.shape(rgb)[1], tf.shape(rgb)[0], filter_margin, tf.constant(False, tf.bool)
+            )
+            negative_pred, _ = filter_edge_boxes(
+                negative_pred, tf.shape(rgb)[1], tf.shape(rgb)[0], filter_margin, tf.constant(False, tf.bool)
+            )
 
     except:
         positive_pred = tf.constant([])
@@ -90,8 +106,10 @@ def plot_inference(rgb: tf.Tensor, boxes: tf.Tensor, nms_output: tf.Tensor, rpn_
         negative_boxes = boxes
 
     if print_prediction_numbers:
-        print(f'tp: {tf.shape(positive_pred)[0]}, fp: {tf.shape(negative_pred)[0]}, fn: '
-              f'{tf.shape(boxes)[0] - tf.shape(positive_pred)[0]}')
+        print(
+            f"tp: {tf.shape(positive_pred)[0]}, fp: {tf.shape(negative_pred)[0]}, fn: "
+            f"{tf.shape(boxes)[0] - tf.shape(positive_pred)[0]}"
+        )
 
     if not is_multi:
         fig = plt.figure(figsize=figsize)
@@ -108,7 +126,7 @@ def plot_inference(rgb: tf.Tensor, boxes: tf.Tensor, nms_output: tf.Tensor, rpn_
         ax.scatter(positive_pred_d[:, 0], positive_pred_d[:, 1], color=pred_colors[0], s=pred_size)
 
     if not show_axis:
-        ax.axis('off')
+        ax.axis("off")
 
     if not is_multi:
         plt.show()
@@ -179,16 +197,25 @@ def _plot_boxes_multi_plot(boxes, color, ax):
     """
     x, y, w, h = tf.split(boxes, 4, axis=1)
     for i, (xi, yi, wi, hi) in enumerate(zip(x, y, w, h)):
-        ax.plot([xi, xi + wi, xi + wi, xi, xi],
-                [yi, yi, yi + hi, yi + hi, yi],
-                color=color)
+        ax.plot([xi, xi + wi, xi + wi, xi, xi], [yi, yi, yi + hi, yi + hi, yi], color=color)
 
 
-def run_plot(validation_data, model: tf.keras.Model, index: int = 0, save_fig: bool = False,
-             fig_path: str = 'plot_of_inference.png', filter_edge: bool = False, filter_margin: int = 32,
-             threshold: float = 0.5, figsize: Tuple[int, int] = (20, 20), gt_colors: Tuple[str, str] = ('g', 'r'),
-             pred_colors: Tuple[str, str] = ('g', 'r'), pred_size: int = 300, print_prediction_numbers: bool = True,
-             show_axis: bool = True) -> None:
+def run_plot(
+    validation_data,
+    model: tf.keras.Model,
+    index: int = 0,
+    save_fig: bool = False,
+    fig_path: str = "plot_of_inference.png",
+    filter_edge: bool = False,
+    filter_margin: int = 32,
+    threshold: float = 0.5,
+    figsize: Tuple[int, int] = (20, 20),
+    gt_colors: Tuple[str, str] = ("g", "r"),
+    pred_colors: Tuple[str, str] = ("g", "r"),
+    pred_size: int = 300,
+    print_prediction_numbers: bool = True,
+    show_axis: bool = True,
+) -> None:
     """
     runs model ond plots the inference
 
@@ -233,14 +260,37 @@ def run_plot(validation_data, model: tf.keras.Model, index: int = 0, save_fig: b
 
         rgb, boxes, rpn_boxes, nms_output2 = _run_model(data, model)
 
-        plot_inference(rgb, boxes, nms_output2, rpn_boxes, save_fig, fig_path, filter_edge, filter_margin, threshold,
-                       figsize, gt_colors, pred_colors, pred_size, print_prediction_numbers, show_axis)
+        plot_inference(
+            rgb,
+            boxes,
+            nms_output2,
+            rpn_boxes,
+            save_fig,
+            fig_path,
+            filter_edge,
+            filter_margin,
+            threshold,
+            figsize,
+            gt_colors,
+            pred_colors,
+            pred_size,
+            print_prediction_numbers,
+            show_axis,
+        )
         break
 
 
-def plot_multiple_outputs(configs: dict, validation_data: tf.data.Dataset, model_paths: List[str], variable: str,
-                          model_variations: List, index: int, faster_model: tf.keras.Model, titles: List[str],
-                          fig_path: str = 'figures/plot_of_inferences.png') -> None:
+def plot_multiple_outputs(
+    configs: dict,
+    validation_data: tf.data.Dataset,
+    model_paths: List[str],
+    variable: str,
+    model_variations: List,
+    index: int,
+    faster_model: tf.keras.Model,
+    titles: List[str],
+    fig_path: str = "figures/plot_of_inferences.png",
+) -> None:
     """
     plots multiple outputs of lnms where one hyperparamter changes
 
@@ -284,11 +334,22 @@ def plot_multiple_outputs(configs: dict, validation_data: tf.data.Dataset, model
     regressions = faster_model(rgb, tau=0.5, nms_iou=0.3)
 
     scores = tf.ones((tf.shape(regressions)[0], 1))
-    plot_inference(rgb, boxes.to_tensor(), scores, regressions, filter_edge=True, is_multi=True, ax=axs[0],
-                   pred_size=50, show_axis=False)
+    plot_inference(
+        rgb,
+        boxes.to_tensor(),
+        scores,
+        regressions,
+        filter_edge=True,
+        is_multi=True,
+        ax=axs[0],
+        pred_size=50,
+        show_axis=False,
+    )
     axs[0].title.set_text("NMS")
 
-    compression_net = CompressionNetwork(configs['feature_size'], configs['anchor_size'], faster_model.backbone)
+    compression_net = CompressionNetwork(
+        configs["feature_size"], configs["anchor_size"], faster_model.backbone
+    )
 
     for i, (path, model_variation) in enumerate(zip(model_paths, model_variations)):
         ax = axs[i + 1]
@@ -297,16 +358,32 @@ def plot_multiple_outputs(configs: dict, validation_data: tf.data.Dataset, model
         copied_config = configs.copy()
         copied_config[variable] = model_variation
 
-        model = LearningNMS(configs, faster_model.rpnetwork, faster_model.backbone, compression_net.compression_layers,
-                            [configs['width'], configs['height']], )
+        model = LearningNMS(
+            configs,
+            faster_model.rpnetwork,
+            faster_model.backbone,
+            compression_net.compression_layers,
+            [configs["width"], configs["height"]],
+        )
         model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=1e-4))
 
         model.load_weights(path)
 
         rgb, boxes, rpn_boxes, nms_output2 = _run_model(data, model)
 
-        plot_inference(rgb, boxes, nms_output2, rpn_boxes, False, '', filter_edge=True, ax=ax, is_multi=True,
-                       pred_size=50, show_axis=False)
+        plot_inference(
+            rgb,
+            boxes,
+            nms_output2,
+            rpn_boxes,
+            False,
+            "",
+            filter_edge=True,
+            ax=ax,
+            is_multi=True,
+            pred_size=50,
+            show_axis=False,
+        )
 
     plt.subplots_adjust(wspace=0.01, hspace=0)
     plt.show()

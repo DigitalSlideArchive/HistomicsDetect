@@ -9,11 +9,10 @@ from .lnms_visualization import plot_inference as plot_inference_lnms, run_plot,
 
 # list out things that are available for public use
 __all__ = (
-
     # functions and classes of this package
-    'plot_evaluation',
-    'plot_inference',
-    'plot_inference_lnms',
-    'run_plot',
-    'plot_multiple_outputs'
+    "plot_evaluation",
+    "plot_inference",
+    "plot_inference_lnms",
+    "run_plot",
+    "plot_multiple_outputs",
 )

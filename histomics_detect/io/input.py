@@ -41,41 +41,46 @@ def dataset(path, png_parser, csv_parser, size, cases=None):
         height in that order, and the png filename.
     """
 
-    #get list of csv and png files in path
-    csvs = [f for f in os.listdir(path) if os.path.splitext(f)[1] == '.csv']
-    pngs = [f for f in os.listdir(path) if os.path.splitext(f)[1] == '.png']
+    # get list of csv and png files in path
+    csvs = [f for f in os.listdir(path) if os.path.splitext(f)[1] == ".csv"]
+    pngs = [f for f in os.listdir(path) if os.path.splitext(f)[1] == ".png"]
 
-    #extract case, roi strings from filenames
+    # extract case, roi strings from filenames
     csv_case_roi = [csv_parser(csv) for csv in csvs]
     png_case_roi = [png_parser(png) for png in pngs]
 
-    #form lists of case + roi for matching
+    # form lists of case + roi for matching
     csv_match_string = [csv[0] + csv[1] for csv in csv_case_roi]
     png_match_string = [png[0] + png[1] for png in png_case_roi]
 
-    #match
-    indexes = [csv_match_string.index(png) if png in csv_match_string else -1 for
-               png in png_match_string]
+    # match
+    indexes = [csv_match_string.index(png) if png in csv_match_string else -1 for png in png_match_string]
 
-    #form tuples of case, matching png file, csv file
-    matches = [(case_roi[0], png, csvs[index]) for (case_roi, png, index) in
-               zip(png_case_roi, pngs, indexes) if index != -1]
+    # form tuples of case, matching png file, csv file
+    matches = [
+        (case_roi[0], png, csvs[index])
+        for (case_roi, png, index) in zip(png_case_roi, pngs, indexes)
+        if index != -1
+    ]
 
-    #filter on cases
+    # filter on cases
     if cases is not None:
         matches = [match for match in matches if match[0] in cases]
 
-    #format outputs
+    # format outputs
     matches = [(path + match[1], path + match[2]) for match in matches]
 
-    #filter on image size
-    matches = [(png, csv) for (png, csv) in matches if
-               (Image.open(png).size[0] > size) and (Image.open(png).size[1] > size)]
+    # filter on image size
+    matches = [
+        (png, csv)
+        for (png, csv) in matches
+        if (Image.open(png).size[0] > size) and (Image.open(png).size[1] > size)
+    ]
 
-    #create tf.data.Dataset object of pairs of csv/png files
+    # create tf.data.Dataset object of pairs of csv/png files
     ds = tf.data.Dataset.from_tensor_slices(matches)
 
-    #map image and csv read operations to generate (rgb, boxes, pngfile) tuple
+    # map image and csv read operations to generate (rgb, boxes, pngfile) tuple
     ds = ds.map(lambda x: (read_png(x[0]), read_csv(x[1]), x[0]))
 
     return ds
@@ -114,20 +119,17 @@ def read_csv(csv_file):
         height in that order.
     """
 
-    #read contents of csv
+    # read contents of csv
     contents = tf.io.read_file(csv_file)
 
-    #split into lines
-    lines = tf.strings.split(contents, '\n')
+    # split into lines
+    lines = tf.strings.split(contents, "\n")
 
-    #decode data lines
-    lines = tf.io.decode_csv(lines[1:-1],
-                             [0.0, 0.0, 0.0, 0.0, '', 0.0, 0.0, 0.0, 0.0, '', ''])
+    # decode data lines
+    lines = tf.io.decode_csv(lines[1:-1], [0.0, 0.0, 0.0, 0.0, "", 0.0, 0.0, 0.0, 0.0, "", ""])
 
-    #embed in ragged tensor
-    boxes = tf.RaggedTensor.from_tensor(tf.stack((lines[0], lines[1],
-                                                  lines[2], lines[3]),
-                                                 axis=1))
+    # embed in ragged tensor
+    boxes = tf.RaggedTensor.from_tensor(tf.stack((lines[0], lines[1], lines[2], lines[3]), axis=1))
 
     return boxes
 
@@ -148,7 +150,7 @@ def read_png(png_file):
         Three dimensional rgb image tensor.
     """
 
-    #read in png and get size
+    # read in png and get size
     rgb = tf.io.decode_png(tf.io.read_file(png_file))
 
     return rgb
@@ -183,12 +185,16 @@ def resize(rgb, boxes, factor):
         N x 4 tensor containing boxes resized by factor.
     """
 
-    #resize image
-    rgb = tf.image.resize(rgb, tf.cast([factor * tf.cast(tf.shape(rgb)[0], tf.float32),
-                                        factor * tf.cast(tf.shape(rgb)[1], tf.float32)],
-                                       tf.int32))
+    # resize image
+    rgb = tf.image.resize(
+        rgb,
+        tf.cast(
+            [factor * tf.cast(tf.shape(rgb)[0], tf.float32), factor * tf.cast(tf.shape(rgb)[1], tf.float32)],
+            tf.int32,
+        ),
+    )
 
-    #resize boxes
+    # resize boxes
     boxes = factor * boxes
 
     return rgb, boxes

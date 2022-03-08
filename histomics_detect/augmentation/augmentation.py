@@ -29,7 +29,7 @@ def _box_crop(corner, length, window):
     """
 
     corner_crop = tf.minimum(tf.maximum(corner, 0), window)
-    length_crop = tf.minimum(tf.maximum(corner+length, 0), window) - corner_crop
+    length_crop = tf.minimum(tf.maximum(corner + length, 0), window) - corner_crop
 
     return corner_crop, length_crop
 
@@ -60,26 +60,26 @@ def flip(rgb, boxes):
         1D tensor containing height/width of cropped boxes.
     """
 
-    #condense ragged tensor
+    # condense ragged tensor
     [x, y, w, h] = tf.unstack(boxes.to_tensor(), num=4, axis=1)
 
     if tf.random.uniform([1])[0] > 0.5:
 
-        #flip image
+        # flip image
         rgb = tf.image.flip_up_down(rgb)
 
-        #flip coordinates
+        # flip coordinates
         y = tf.cast(tf.shape(rgb)[0], tf.float32) - y - h
 
     if tf.random.uniform([1])[0] > 0.5:
 
-        #flip image
+        # flip image
         rgb = tf.image.flip_left_right(rgb)
 
-        #flip coordinates
+        # flip coordinates
         x = tf.cast(tf.shape(rgb)[1], tf.float32) - x - w
 
-    #re-stack
+    # re-stack
     boxes = tf.RaggedTensor.from_tensor(tf.stack([x, y, w, h], axis=1))
 
     return rgb, boxes
@@ -122,69 +122,66 @@ def crop(rgb, boxes, width, height, min_fraction=0.5):
         of its original uncropped size.
     """
 
-    #modify shapes
+    # modify shapes
     width = tf.minimum(width, tf.shape(rgb)[1])
     height = tf.minimum(height, tf.shape(rgb)[0])
 
-    #condense ragged tensor
+    # condense ragged tensor
     [x, y, w, h] = tf.unstack(boxes.to_tensor(), num=4, axis=1)
 
-    #identify candidate cells to include in cropped roi
+    # identify candidate cells to include in cropped roi
     c_width = tf.less(w, tf.cast(width, tf.float32))
     c_height = tf.less(h, tf.cast(height, tf.float32))
     c_left = tf.greater_equal(x, 0.0)
     c_top = tf.greater_equal(y, 0.0)
-    c_right = tf.less(x+w, tf.cast(tf.shape(rgb)[1], tf.float32))
-    c_bottom = tf.less(y+h, tf.cast(tf.shape(rgb)[0], tf.float32))
-    conditions = tf.stack([c_width, c_height, c_left,
-                           c_top, c_right, c_bottom], axis=1)
+    c_right = tf.less(x + w, tf.cast(tf.shape(rgb)[1], tf.float32))
+    c_bottom = tf.less(y + h, tf.cast(tf.shape(rgb)[0], tf.float32))
+    conditions = tf.stack([c_width, c_height, c_left, c_top, c_right, c_bottom], axis=1)
     include = tf.cast(tf.where(tf.reduce_all(conditions, axis=1)), tf.int32)
     x = tf.gather(x, include)
     y = tf.gather(y, include)
     w = tf.gather(w, include)
     h = tf.gather(h, include)
 
-    #select box/cell at random
-    selected = tf.random.uniform([1], 0, tf.size(x)-1, dtype=tf.int32)[0]
+    # select box/cell at random
+    selected = tf.random.uniform([1], 0, tf.size(x) - 1, dtype=tf.int32)[0]
 
-    #Determine range of crop limits for upper left corner of random
-    #(height, width) fields that include box. Calculate this in floats to deal
-    #with edge cases like floor(x[selected])=0.
+    # Determine range of crop limits for upper left corner of random
+    # (height, width) fields that include box. Calculate this in floats to deal
+    # with edge cases like floor(x[selected])=0.
     lower_x = tf.maximum(x[selected] + w[selected] - tf.cast(width, tf.float32), 0)
-    upper_x = tf.minimum(x[selected], tf.cast(tf.shape(rgb)[1] - width,
-                                              tf.float32))
+    upper_x = tf.minimum(x[selected], tf.cast(tf.shape(rgb)[1] - width, tf.float32))
     lower_y = tf.maximum(y[selected] + h[selected] - tf.cast(height, tf.float32), 0)
-    upper_y = tf.minimum(y[selected], tf.cast(tf.shape(rgb)[0] - height,
-                                              tf.float32))
+    upper_y = tf.minimum(y[selected], tf.cast(tf.shape(rgb)[0] - height, tf.float32))
 
-    #sample upper left corner of roi
+    # sample upper left corner of roi
     x_crop = tf.random.uniform([1], lower_x[0], upper_x[0], tf.float32)[0]
     y_crop = tf.random.uniform([1], lower_y[0], upper_y[0], tf.float32)[0]
     x_crop = tf.cast(tf.round(x_crop), tf.int32)
     y_crop = tf.cast(tf.round(y_crop), tf.int32)
 
-    #crop
-    crop = tf.image.crop_to_bounding_box(rgb, y_crop, x_crop,
-                                         tf.cast(height, tf.int32),
-                                         tf.cast(width, tf.int32))
+    # crop
+    crop = tf.image.crop_to_bounding_box(
+        rgb, y_crop, x_crop, tf.cast(height, tf.int32), tf.cast(width, tf.int32)
+    )
 
-    #translate boxes and apply crop
+    # translate boxes and apply crop
     x = x - tf.cast(x_crop, tf.float32)
     y = y - tf.cast(y_crop, tf.float32)
     x, wc = _box_crop(x, w, tf.cast(width, tf.float32))
     y, hc = _box_crop(y, h, tf.cast(height, tf.float32))
 
-    #calculate cropped box area, proportion of box in cropped region
+    # calculate cropped box area, proportion of box in cropped region
     proportion = tf.divide(tf.multiply(wc, hc), tf.multiply(w, h))
 
-    #assign outputs
+    # assign outputs
     mask = tf.greater_equal(proportion, min_fraction)
     x = tf.boolean_mask(x, mask)
     y = tf.boolean_mask(y, mask)
     w = tf.boolean_mask(wc, mask)
     h = tf.boolean_mask(hc, mask)
 
-    boxes = tf.RaggedTensor.from_tensor(tf.stack((x,y,w,h), axis=1))
+    boxes = tf.RaggedTensor.from_tensor(tf.stack((x, y, w, h), axis=1))
 
     return crop, boxes
 
@@ -213,19 +210,19 @@ def jitter(boxes, percent=0.05):
         up to 'percent' of the box width and height respectively.
     """
 
-    #condense ragged tensor
+    # condense ragged tensor
     [x, y, w, h] = tf.unstack(boxes.to_tensor(), num=4, axis=1)
 
-    #generate noise vectors
+    # generate noise vectors
     x_noise = tf.random.uniform(tf.shape(x), -percent, percent, tf.float32)
     y_noise = tf.random.uniform(tf.shape(y), -percent, percent, tf.float32)
 
-    #modify locations
+    # modify locations
     x = x + tf.multiply(x_noise, w)
     y = y + tf.multiply(y_noise, h)
 
-    #stack result and return
-    boxes = tf.RaggedTensor.from_tensor(tf.stack((x,y,w,h), axis=1))
+    # stack result and return
+    boxes = tf.RaggedTensor.from_tensor(tf.stack((x, y, w, h), axis=1))
 
     return boxes
 
@@ -252,18 +249,18 @@ def shrink(boxes, percent=0.05):
         up to 'percent' of the box width and height respectively.
     """
 
-    #condense ragged tensor
+    # condense ragged tensor
     [x, y, w, h] = tf.unstack(boxes.to_tensor(), num=4, axis=1)
 
-    #generate noise vectors
-    w_noise = tf.random.uniform(tf.shape(x), 1.0-percent, 1.0+percent, tf.float32)
-    h_noise = tf.random.uniform(tf.shape(y), 1.0-percent, 1.0+percent, tf.float32)
+    # generate noise vectors
+    w_noise = tf.random.uniform(tf.shape(x), 1.0 - percent, 1.0 + percent, tf.float32)
+    h_noise = tf.random.uniform(tf.shape(y), 1.0 - percent, 1.0 + percent, tf.float32)
 
-    #modify dimensions
+    # modify dimensions
     w = tf.multiply(w_noise, w)
     h = tf.multiply(h_noise, h)
 
-    #stack result and return
-    boxes = tf.RaggedTensor.from_tensor(tf.stack((x,y,w,h), axis=1))
+    # stack result and return
+    boxes = tf.RaggedTensor.from_tensor(tf.stack((x, y, w, h), axis=1))
 
     return boxes

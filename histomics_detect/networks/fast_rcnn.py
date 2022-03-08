@@ -1,7 +1,7 @@
 import tensorflow as tf
 
 
-def fast_rcnn(features, units=[4096, 4096], activations=['relu', 'relu'], pool=2, tiles=3):
+def fast_rcnn(features, units=[4096, 4096], activations=["relu", "relu"], pool=2, tiles=3):
     """
     Produces the terminal network used to refine regressions from the region-proposal network
     and to optionally classify the objects.
@@ -29,27 +29,26 @@ def fast_rcnn(features, units=[4096, 4096], activations=['relu', 'relu'], pool=2
         .
     """
 
-    #generates fast RCNN model used in second regression that follows region proposal network.
+    # generates fast RCNN model used in second regression that follows region proposal network.
 
-    #create input layer
-    fastrcnn_input = tf.keras.Input(shape=(pool*tiles, pool*tiles, features))
+    # create input layer
+    fastrcnn_input = tf.keras.Input(shape=(pool * tiles, pool * tiles, features))
 
-    #pooling over each roialign tile
-    pooled = tf.keras.layers.MaxPool2D(pool_size=(pool, pool), padding='valid')(fastrcnn_input)
+    # pooling over each roialign tile
+    pooled = tf.keras.layers.MaxPool2D(pool_size=(pool, pool), padding="valid")(fastrcnn_input)
 
-    #stack the pooled feature vectors from each tile into a single feature vector
-    pooled = tf.reshape(pooled, (tf.shape(pooled)[0], tiles*tiles*features))
+    # stack the pooled feature vectors from each tile into a single feature vector
+    pooled = tf.reshape(pooled, (tf.shape(pooled)[0], tiles * tiles * features))
 
-    #fully connected layers
+    # fully connected layers
     x = pooled
     for unit, activation in zip(units, activations):
         x = tf.keras.layers.Dense(unit, activation=activation)(x)
 
-    #final layer to generate parameterized regression prediction
-    regression_align = tf.keras.layers.Dense(4, activation='linear')(x)
+    # final layer to generate parameterized regression prediction
+    regression_align = tf.keras.layers.Dense(4, activation="linear")(x)
 
-    #create model
-    fastrcnn = tf.keras.Model(inputs=fastrcnn_input,
-                              outputs=[regression_align])
+    # create model
+    fastrcnn = tf.keras.Model(inputs=fastrcnn_input, outputs=[regression_align])
 
     return fastrcnn

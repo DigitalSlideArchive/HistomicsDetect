@@ -45,11 +45,15 @@ def create_anchors(anchor_px, field, width, height, filter_boxes=True):
     x_pair, y_pair = _generate_x_y_pairs(px, field, width, height)
 
     # transform from 2D meshgrid format to array format (1 row per anchor)
-    single_size_anchors = tf.concat((tf.reshape(x_pair, (tf.size(x_pair), 1)),
-                                    tf.reshape(y_pair, (tf.size(x_pair), 1)),
-                                    tf.ones((tf.size(x_pair), 1)),
-                                    tf.ones((tf.size(x_pair), 1))),
-                                    axis=1)
+    single_size_anchors = tf.concat(
+        (
+            tf.reshape(x_pair, (tf.size(x_pair), 1)),
+            tf.reshape(y_pair, (tf.size(x_pair), 1)),
+            tf.ones((tf.size(x_pair), 1)),
+            tf.ones((tf.size(x_pair), 1)),
+        ),
+        axis=1,
+    )
 
     # replicate array for each anchor size
     anchors = tf.tile(tf.expand_dims(single_size_anchors, axis=0), [tf.size(px), 1, 1])
@@ -63,7 +67,6 @@ def create_anchors(anchor_px, field, width, height, filter_boxes=True):
     # remove anchors that cross the boundary
     if filter_boxes:
         anchors, _ = filter_edge_boxes(anchors, width, height, 0, tf.constant(False, tf.bool))
-
 
     return anchors
 
@@ -141,11 +144,10 @@ def first_last_anchor_indexes(size, field, length) -> Tuple[int, int]:
     last: int32
         index of the last anchor
     """
-    first = tf.math.ceil(tf.cast(size, tf.float32) /
-                         (2 * tf.cast(field, tf.float32)) - 1 / 2)
-    last = tf.math.floor((tf.cast(length, tf.float32) -
-                          tf.cast(size, tf.float32) / 2) /
-                         tf.cast(field, tf.float32) - 1 / 2)
+    first = tf.math.ceil(tf.cast(size, tf.float32) / (2 * tf.cast(field, tf.float32)) - 1 / 2)
+    last = tf.math.floor(
+        (tf.cast(length, tf.float32) - tf.cast(size, tf.float32) / 2) / tf.cast(field, tf.float32) - 1 / 2
+    )
 
     return first, last
 

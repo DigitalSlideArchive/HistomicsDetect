@@ -25,8 +25,8 @@ def field_size(backbone, length=65):
     ratio = []
     for dim in np.arange(1, length, 1):
         im = np.zeros(shape=(dim, dim, 3), dtype=np.uint8)
-        prediction = backbone.predict(np.array([im,])).shape
-        ratio.append(dim/prediction[2])
+        prediction = backbone.predict(np.array([im])).shape
+        ratio.append(dim / prediction[2])
     field = np.max(ratio)
 
     return field

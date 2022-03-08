@@ -7,14 +7,28 @@ from histomics_detect.anchors.create import create_anchors
 from histomics_detect.models.block_model import BlockModel
 from histomics_detect.roialign.roialign import roialign
 from histomics_detect.boxes.transforms import unparameterize, parameterize, clip_boxes
-from histomics_detect.models.lnms_loss import normal_loss, clustering_loss, paper_loss, xor_loss, normal_clustering_loss
+from histomics_detect.models.lnms_loss import (
+    normal_loss,
+    clustering_loss,
+    paper_loss,
+    xor_loss,
+    normal_clustering_loss,
+)
 from histomics_detect.boxes.match import cluster_assignment
 from histomics_detect.boxes.cross_boxes import cross_from_boxes
 
 
 class LearningNMS(tf.keras.Model, ABC):
-    def __init__(self, configs: dict, rpnetwork: tf.keras.Model, backbone: tf.keras.Model,
-                 compression_network: tf.keras.Model, shape, *args, **kwargs):
+    def __init__(
+        self,
+        configs: dict,
+        rpnetwork: tf.keras.Model,
+        backbone: tf.keras.Model,
+        compression_network: tf.keras.Model,
+        shape,
+        *args,
+        **kwargs,
+    ):
         """
         Learning-NMS model for training a Block-Model
 
@@ -42,7 +56,7 @@ class LearningNMS(tf.keras.Model, ABC):
         # add models to self
         self.rpnetwork = rpnetwork
         self.backbone = backbone
-        self.lmbda = configs['rpn_lmbda']
+        self.lmbda = configs["rpn_lmbda"]
 
         self.field = field_size(self.backbone)
         self.anchors = create_anchors(self.anchor_px, self.field, shape[0], shape[1])
@@ -50,32 +64,40 @@ class LearningNMS(tf.keras.Model, ABC):
         self.compression_net = compression_network
 
         if not self.data_only:
-            self.net = BlockModel([self._initialize_block(i) for i in range(self.num_blocks)],
-                                  self._initialize_final_output(), threshold=self.threshold,
-                                  train_tile=self.train_tile, use_image_features=self.use_image_features,
-                                  use_distance=self.use_distance, original_lnms=self.original_lnms)
+            self.net = BlockModel(
+                [self._initialize_block(i) for i in range(self.num_blocks)],
+                self._initialize_final_output(),
+                threshold=self.threshold,
+                train_tile=self.train_tile,
+                use_image_features=self.use_image_features,
+                use_distance=self.use_distance,
+                original_lnms=self.original_lnms,
+            )
 
             if self.use_reg:
                 self.init_regression = self._initialize_init_regression()
 
             # define metrics
-            loss_col = tf.keras.metrics.Mean(name='loss')
-            loss_pos = tf.keras.metrics.Mean(name='pos_loss')
-            loss_neg = tf.keras.metrics.Mean(name='neg_loss')
+            loss_col = tf.keras.metrics.Mean(name="loss")
+            loss_pos = tf.keras.metrics.Mean(name="pos_loss")
+            loss_neg = tf.keras.metrics.Mean(name="neg_loss")
             self.standard = [loss_col, loss_pos, loss_neg]
 
     def _initialize_init_regression(self) -> tf.keras.Model:
         feature_size_multiplier = 2 if self.combine_box_and_cross else 1
-        shape = (feature_size_multiplier * self.feature_size + 5)
+        shape = feature_size_multiplier * self.feature_size + 5
 
         init_input = tf.keras.Input(shape=shape, name="init_regression_input")
 
-        layer1 = tf.keras.layers.Dense(int(shape / 8), activation=self.activation, use_bias=True,
-                                       name=f'init_regression_layer_1')(init_input)
-        layer2 = tf.keras.layers.Dense(int(shape / 8), activation=self.activation, use_bias=True,
-                                       name=f'init_regression_layer_2')(layer1)
-        layer3 = tf.keras.layers.Dense(4, activation='linear', use_bias=True,
-                                       name=f'init_regression_layer_3')(layer2)
+        layer1 = tf.keras.layers.Dense(
+            int(shape / 8), activation=self.activation, use_bias=True, name="init_regression_layer_1"
+        )(init_input)
+        layer2 = tf.keras.layers.Dense(
+            int(shape / 8), activation=self.activation, use_bias=True, name="init_regression_layer_2"
+        )(layer1)
+        layer3 = tf.keras.layers.Dense(4, activation="linear", use_bias=True, name="init_regression_layer_3")(
+            layer2
+        )
 
         return tf.keras.Model(inputs=init_input, outputs=layer3, name="init_regression_network")
 
@@ -93,15 +115,21 @@ class LearningNMS(tf.keras.Model, ABC):
         """
         feature_size_multiplier = 2 if self.combine_box_and_cross and self.use_image_features else 1
 
-        final_input = tf.keras.Input(shape=self.feature_size * feature_size_multiplier + 1,
-                                     name="final_after_block_layers_input")
+        final_input = tf.keras.Input(
+            shape=self.feature_size * feature_size_multiplier + 1, name="final_after_block_layers_input"
+        )
         x = final_input
         for i in range(self.num_hidden_layers):
-            x = tf.keras.layers.Dense(self.final_hidden_layer_features, activation=self.activation, use_bias=True,
-                                      name=f'final_after_block_layer_{i}')(x)
+            x = tf.keras.layers.Dense(
+                self.final_hidden_layer_features,
+                activation=self.activation,
+                use_bias=True,
+                name=f"final_after_block_layer_{i}",
+            )(x)
         output_size = self.add_regression_param * 2 + 1 + int(self.objectness_format)
-        x = tf.keras.layers.Dense(output_size, activation=self.final_activation, name="output_score_layer",
-                                  use_bias=True)(x)
+        x = tf.keras.layers.Dense(
+            output_size, activation=self.final_activation, name="output_score_layer", use_bias=True
+        )(x)
 
         return tf.keras.Model(inputs=final_input, outputs=x)
 
@@ -136,21 +164,33 @@ class LearningNMS(tf.keras.Model, ABC):
         feature_size_multiplier = 2 if self.combine_box_and_cross and self.use_image_features else 1
 
         shape = 6 + (feature_size_multiplier * 2 * self.feature_size + 2)
-        block_input = tf.keras.Input(shape=shape, name=f'block_{block_id}_input')
-        x = tf.keras.layers.BatchNormalization(axis=1, name=f'block_{block_id}_batch_norm_0_layer')(block_input)
+        block_input = tf.keras.Input(shape=shape, name=f"block_{block_id}_input")
+        x = tf.keras.layers.BatchNormalization(axis=1, name=f"block_{block_id}_batch_norm_0_layer")(
+            block_input
+        )
         for i in range(self.num_layers_block):
-            x = tf.keras.layers.Dense(self.block_hidden_layer_features, activation=self.activation,
-                                      name=f'block_{block_id}layer{i}', use_bias=True)(x)
-        normed_x = tf.keras.layers.BatchNormalization(axis=1, name=f'block_{block_id}_batch_norm_1_layer')(x)
-        block = tf.keras.Model(inputs=block_input, outputs=normed_x, name=f'block_{block_id}_layers')
+            x = tf.keras.layers.Dense(
+                self.block_hidden_layer_features,
+                activation=self.activation,
+                name=f"block_{block_id}layer{i}",
+                use_bias=True,
+            )(x)
+        normed_x = tf.keras.layers.BatchNormalization(axis=1, name=f"block_{block_id}_batch_norm_1_layer")(x)
+        block = tf.keras.Model(inputs=block_input, outputs=normed_x, name=f"block_{block_id}_layers")
 
-        final_input = tf.keras.Input(shape=self.block_hidden_layer_features, name=f'block_{block_id}_after_pool_input')
-        output = tf.keras.Model(inputs=final_input,
-                                outputs=tf.keras.layers.Dense(self.feature_size * feature_size_multiplier + 1,
-                                                              activation='linear',
-                                                              name=f'block_{block_id}_after_pool_layer', use_bias=True)(
-                                    final_input),
-                                name=f'block_{block_id}_output')
+        final_input = tf.keras.Input(
+            shape=self.block_hidden_layer_features, name=f"block_{block_id}_after_pool_input"
+        )
+        output = tf.keras.Model(
+            inputs=final_input,
+            outputs=tf.keras.layers.Dense(
+                self.feature_size * feature_size_multiplier + 1,
+                activation="linear",
+                name=f"block_{block_id}_after_pool_layer",
+                use_bias=True,
+            )(final_input),
+            name=f"block_{block_id}_output",
+        )
 
         return block, output
 
@@ -176,18 +216,25 @@ class LearningNMS(tf.keras.Model, ABC):
 
         # calculate interpolated features
         if self.cross_boxes:
-            cross_boxes = cross_from_boxes(rpn_boxes, self.cross_scale, image_width=self.width,
-                                           image_height=self.height)
-            interpolated = roialign(features, tf.reshape(cross_boxes, (-1, 4)), self.field,
-                                    pool=self.roialign_pool, tiles=self.roialign_tiles)
+            cross_boxes = cross_from_boxes(
+                rpn_boxes, self.cross_scale, image_width=self.width, image_height=self.height
+            )
+            interpolated = roialign(
+                features,
+                tf.reshape(cross_boxes, (-1, 4)),
+                self.field,
+                pool=self.roialign_pool,
+                tiles=self.roialign_tiles,
+            )
             interpolated = reduction_func(interpolated, axis=1)
             interpolated = reduction_func(interpolated, axis=1)
             interpolated = tf.reshape(interpolated, (tf.shape(rpn_boxes)[0], 2, -1))
             interpolated = reduction_func(interpolated, axis=1)
 
             if self.combine_box_and_cross:
-                interpolated_box = roialign(features, rpn_boxes, self.field,
-                                            pool=self.roialign_pool, tiles=self.roialign_tiles)
+                interpolated_box = roialign(
+                    features, rpn_boxes, self.field, pool=self.roialign_pool, tiles=self.roialign_tiles
+                )
                 interpolated_box = reduction_func(interpolated_box, axis=1)
                 interpolated_box = reduction_func(interpolated_box, axis=1)
                 interpolated = tf.concat([interpolated, interpolated_box], axis=1)
@@ -195,10 +242,12 @@ class LearningNMS(tf.keras.Model, ABC):
         else:
             if self.expand_boxes:
                 rpn_boxes = tf.concat(
-                    [rpn_boxes[:, :2] - self.box_expand_value, rpn_boxes[:, 2:] + self.box_expand_value * 2])
+                    [rpn_boxes[:, :2] - self.box_expand_value, rpn_boxes[:, 2:] + self.box_expand_value * 2]
+                )
                 rpn_boxes = clip_boxes(rpn_boxes, self.width, self.height)
-            interpolated = roialign(features, rpn_boxes, self.field,
-                                    pool=self.roialign_pool, tiles=self.roialign_tiles)
+            interpolated = roialign(
+                features, rpn_boxes, self.field, pool=self.roialign_pool, tiles=self.roialign_tiles
+            )
             interpolated = reduction_func(interpolated, axis=1)
             interpolated = reduction_func(interpolated, axis=1)
 
@@ -300,7 +349,7 @@ class LearningNMS(tf.keras.Model, ABC):
             self._cal_update_performance_stats(boxes, rpn_boxes, nms_output)
 
         # save loss and metrics
-        losses = {'lnms_loss': loss}
+        losses = {"lnms_loss": loss}
         metrics = {m.name: m.result() for m in self.standard}
 
         return {**losses, **metrics}
@@ -332,35 +381,72 @@ class LearningNMS(tf.keras.Model, ABC):
         labels
         """
         # calculate loss
-        if self.loss_type == 'dummy':
+        if self.loss_type == "dummy":
             scores = tf.expand_dims(nms_output[:, 0], axis=1)
             loss = tf.reduce_sum(self.loss_object(scores, tf.ones(tf.shape(nms_output))))
             labels = []
-        elif self.loss_type == 'xor':
+        elif self.loss_type == "xor":
             scores = tf.expand_dims(nms_output[:, 0], axis=1)
             clusters = cluster_assignment(boxes, rpn_boxes)
             loss, labels = xor_loss(scores, clusters)
             # loss, labels = self._cal_xor_loss(nms_output, cluster_assignment)
-        elif self.loss_type == 'clustering':
+        elif self.loss_type == "clustering":
             clusters = cluster_assignment(boxes, rpn_boxes)
-            loss, labels = clustering_loss(nms_output, clusters, self.loss_object, self.positive_weight,
-                                           self.standard, boxes, rpn_boxes, self.weighted_loss, self.neg_pos_loss,
-                                           self.add_regression_param)
-        elif self.loss_type == 'paper':
+            loss, labels = clustering_loss(
+                nms_output,
+                clusters,
+                self.loss_object,
+                self.positive_weight,
+                self.standard,
+                boxes,
+                rpn_boxes,
+                self.weighted_loss,
+                self.neg_pos_loss,
+                self.add_regression_param,
+            )
+        elif self.loss_type == "paper":
             scores = tf.expand_dims(nms_output[:, 0], axis=1)
-            loss, labels = paper_loss(boxes, rpn_boxes, scores, self.loss_object, self.positive_weight,
-                                      self.standard, self.weighted_loss, self.neg_pos_loss, self.iou_threshold)
-        elif self.loss_type == 'clustering_normal':
+            loss, labels = paper_loss(
+                boxes,
+                rpn_boxes,
+                scores,
+                self.loss_object,
+                self.positive_weight,
+                self.standard,
+                self.weighted_loss,
+                self.neg_pos_loss,
+                self.iou_threshold,
+            )
+        elif self.loss_type == "clustering_normal":
             clusters = cluster_assignment(boxes, rpn_boxes)
-            loss, labels = normal_clustering_loss(nms_output, boxes, rpn_boxes, clusters, self.loss_object,
-                                                  self.positive_weight, self.standard, self.weighted_loss,
-                                                  self.neg_pos_loss, self.use_pos_neg_loss, self.norm_loss_weight,
-                                                  self.add_regression_param, self.iou_threshold)
-        elif self.loss_type == 'custom':
+            loss, labels = normal_clustering_loss(
+                nms_output,
+                boxes,
+                rpn_boxes,
+                clusters,
+                self.loss_object,
+                self.positive_weight,
+                self.standard,
+                self.weighted_loss,
+                self.neg_pos_loss,
+                self.use_pos_neg_loss,
+                self.norm_loss_weight,
+                self.add_regression_param,
+                self.iou_threshold,
+            )
+        elif self.loss_type == "custom":
             loss, labels = self.custom_loss(self, nms_output, boxes, rpn_boxes)
         else:
             scores = tf.expand_dims(nms_output[:, 0], axis=1)
-            loss, labels = normal_loss(self.loss_object, boxes, rpn_boxes, scores, self.positive_weight,
-                                       self.standard, neg_pos_loss=True, min_iou=self.iou_threshold)
+            loss, labels = normal_loss(
+                self.loss_object,
+                boxes,
+                rpn_boxes,
+                scores,
+                self.positive_weight,
+                self.standard,
+                neg_pos_loss=True,
+                min_iou=self.iou_threshold,
+            )
 
         return loss, labels

@@ -18,25 +18,24 @@ class AveragePrecision(tf.keras.metrics.Metric):
         Range is (0, 1). Default value 0.1.
     """
 
-    def __init__(self, iou_thresh=0.5, delta=0.1, name='average_precision', **kwargs):
+    def __init__(self, iou_thresh=0.5, delta=0.1, name="average_precision", **kwargs):
         """
         The constructor accepts the 'iou_thresh' and 'delta' attributes.
         """
 
         super(AveragePrecision, self).__init__(name=name, **kwargs)
 
-        #set iou threshold and objectness increment
+        # set iou threshold and objectness increment
         self.iou_thresh = iou_thresh
         self.delta = delta
 
-        #calculate number of thresholds
+        # calculate number of thresholds
         n = tf.size(tf.range(0, 1, delta))
 
-        #set states to zero
-        self.tp = self.add_weight(name='tp', shape=n, initializer='zeros')
-        self.fp = self.add_weight(name='fp', shape=n, initializer='zeros')
-        self.fn = self.add_weight(name='fn', shape=n, initializer='zeros')
-
+        # set states to zero
+        self.tp = self.add_weight(name="tp", shape=n, initializer="zeros")
+        self.fp = self.add_weight(name="fp", shape=n, initializer="zeros")
+        self.fn = self.add_weight(name="fn", shape=n, initializer="zeros")
 
     def update_state(self, y_true, y_pred, sample_weight=None):
         """
@@ -56,38 +55,41 @@ class AveragePrecision(tf.keras.metrics.Metric):
             of the upper-left box corners and the box widths and heights.
         """
 
-        #split predictions into objectness, regression
+        # split predictions into objectness, regression
         obj = tf.gather(y_pred, [0, 1], axis=1)
         reg = tf.gather(y_pred, tf.constant([2, 3, 4, 5], tf.int32), axis=1)
 
-        #generate objectness threshold sequence
+        # generate objectness threshold sequence
         taus = tf.range(0, 1, self.delta)
 
         def threshold(obj, reg, boxes, tau, min_iou):
 
-            #call objects from rpn
-            positive = tf.greater_equal(obj[:,1], tau)
+            # call objects from rpn
+            positive = tf.greater_equal(obj[:, 1], tau)
             obj = tf.boolean_mask(obj, positive, axis=0)
             reg = tf.boolean_mask(reg, positive, axis=0)
 
-            #greedy mapping regressions to ground-truth boxes
+            # greedy mapping regressions to ground-truth boxes
             ious = iou(reg, boxes)
             tp, fp, fn, tp_list, fp_list, fn_list = greedy_iou_mapping(ious, min_iou)
 
             return tf.stack([tp, fp, fn], axis=0)
 
-        #calculate precision-recall values
-        packed = tf.map_fn(lambda x: threshold(obj, reg, y_true, x, self.iou_thresh),
-                           taus, parallel_iterations=10, fn_output_signature=tf.int32)
+        # calculate precision-recall values
+        packed = tf.map_fn(
+            lambda x: threshold(obj, reg, y_true, x, self.iou_thresh),
+            taus,
+            parallel_iterations=10,
+            fn_output_signature=tf.int32,
+        )
 
-        #unpack
+        # unpack
         tp, fp, fn = tf.unstack(packed, axis=1)
 
-        #update
+        # update
         self.tp.assign_add(tf.cast(tp, tf.float32))
         self.fp.assign_add(tf.cast(fp, tf.float32))
         self.fn.assign_add(tf.cast(fn, tf.float32))
-
 
     def result(self):
         """
@@ -95,17 +97,16 @@ class AveragePrecision(tf.keras.metrics.Metric):
         score.
         """
 
-        #calculate precision
+        # calculate precision
         precision = self.tp / (self.tp + self.fp)
 
-        #add 1 to end
+        # add 1 to end
         precision = tf.concat([precision, [1.0]], axis=0)
 
-        #average precision
+        # average precision
         ap = tf.reduce_mean(precision)
 
         return ap
-
 
     def reset_state(self):
         """

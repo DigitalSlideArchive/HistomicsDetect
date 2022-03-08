@@ -47,35 +47,34 @@ def filter_anchors(boxes, anchors, alpha=0.7, beta=0.3, gamma=0.3):
         anchor width and height.
     """
 
-    #calculate IOU between ground truth and anchors
+    # calculate IOU between ground truth and anchors
     ious = iou(boxes, anchors)
 
-    #anchors where IOU > alpha
+    # anchors where IOU > alpha
     matches = tf.cast(tf.where(tf.greater(ious, alpha)), dtype=tf.int32)
-    alpha_id = matches[:,1]
-    alpha_box = matches[:,0]
+    alpha_id = matches[:, 1]
+    alpha_box = matches[:, 0]
 
-    #anchors where max match for a box and IOU > beta
+    # anchors where max match for a box and IOU > beta
     beta_max = tf.reduce_max(ious, axis=1)
     beta_id = tf.argmax(ious, axis=1, output_type=tf.int32)
-    beta_box = tf.range(0,tf.shape(boxes)[0], dtype=tf.int32)
+    beta_box = tf.range(0, tf.shape(boxes)[0], dtype=tf.int32)
 
-    #filter out duplicates
-    keep = tf.where(tf.logical_and(tf.greater(beta_max, beta),
-                                   tf.less(beta_max, alpha)))[:,0]
+    # filter out duplicates
+    keep = tf.where(tf.logical_and(tf.greater(beta_max, beta), tf.less(beta_max, alpha)))[:, 0]
     beta_id = tf.gather(beta_id, keep)
     beta_box = tf.gather(beta_box, keep)
 
-    #combine positive anchors
-    alpha_anchors = tf.concat([tf.gather(anchors, alpha_id),
-                               tf.expand_dims(tf.cast(alpha_box, tf.float32), axis=1)],
-                              axis=1)
-    beta_anchors = tf.concat([tf.gather(anchors, beta_id),
-                              tf.expand_dims(tf.cast(beta_box, tf.float32), axis=1)],
-                             axis=1)
+    # combine positive anchors
+    alpha_anchors = tf.concat(
+        [tf.gather(anchors, alpha_id), tf.expand_dims(tf.cast(alpha_box, tf.float32), axis=1)], axis=1
+    )
+    beta_anchors = tf.concat(
+        [tf.gather(anchors, beta_id), tf.expand_dims(tf.cast(beta_box, tf.float32), axis=1)], axis=1
+    )
     positive = tf.concat([alpha_anchors, beta_anchors], axis=0)
 
-    #anchors with IOU < gamma
+    # anchors with IOU < gamma
     negative = tf.gather(anchors, tf.where(tf.less(tf.reduce_max(ious, axis=0), gamma)))
     negative = tf.squeeze(negative)
 

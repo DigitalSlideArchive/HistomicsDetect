@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 import tensorflow as tf
 
-plt.rcParams['figure.dpi'] = 300 #set figure dots-per-inch
+plt.rcParams["figure.dpi"] = 300  # set figure dots-per-inch
 
 
 def _plot_boxes(boxes, color):
@@ -18,12 +18,10 @@ def _plot_boxes(boxes, color):
 
     x, y, w, h = tf.split(boxes, 4, axis=1)
     for i, (xi, yi, wi, hi) in enumerate(zip(x, y, w, h)):
-        plt.plot([xi, xi+wi, xi+wi, xi, xi],
-                 [yi, yi, yi+hi, yi+hi, yi],
-                 color=color)
+        plt.plot([xi, xi + wi, xi + wi, xi, xi], [yi, yi, yi + hi, yi + hi, yi], color=color)
 
 
-def plot_inference(rgb, regressions, color='g'):
+def plot_inference(rgb, regressions, color="g"):
     """Generates plot of inference results.
 
     Parameters
@@ -75,6 +73,6 @@ def plot_evaluation(rgb, boxes, regressions, tp_list, fp_list, fn_list):
     """
 
     plt.imshow(rgb)
-    _plot_boxes(tf.gather(regressions, tp_list[:,0], axis=0), 'g')
-    _plot_boxes(tf.gather(regressions, fp_list, axis=0), 'r')
-    _plot_boxes(tf.gather(boxes, fn_list, axis=0), 'b')
+    _plot_boxes(tf.gather(regressions, tp_list[:, 0], axis=0), "g")
+    _plot_boxes(tf.gather(regressions, fp_list, axis=0), "r")
+    _plot_boxes(tf.gather(boxes, fn_list, axis=0), "b")

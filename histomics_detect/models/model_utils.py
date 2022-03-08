@@ -32,7 +32,9 @@ def extract_data(data):
     rgb = tf.squeeze(rgb)
 
     # convert boxes from RaggedTensor
-    expand_fn = lambda x: tf.expand_dims(x, axis=0)
+    def expand_fn(x):
+        return tf.expand_dims(x, axis=0)
+
     boxes = boxes.to_tensor()
     boxes = tf.squeeze(boxes)
     boxes = tf.cond(tf.size(tf.shape(boxes)) == 1, lambda: expand_fn(boxes), lambda: boxes)
@@ -46,8 +48,15 @@ def extract_data(data):
     return norm, boxes, image_name
 
 
-def extract_boxes_n_scores(norm: tf.Tensor, backbone: tf.keras.Model, rpnetwork: tf.keras.Model, anchors: tf.Tensor,
-                           anchor_px: tf.Tensor, field: int, initial_prediction_threshold: float = 0.3):
+def extract_boxes_n_scores(
+    norm: tf.Tensor,
+    backbone: tf.keras.Model,
+    rpnetwork: tf.keras.Model,
+    anchors: tf.Tensor,
+    anchor_px: tf.Tensor,
+    field: int,
+    initial_prediction_threshold: float = 0.3,
+):
     """
     extracts rpn_boxes and corresponding objectiveness scores with the faster r-cnn network
 
