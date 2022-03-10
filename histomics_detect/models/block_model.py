@@ -6,9 +6,16 @@ from histomics_detect.boxes.neighborhood import all_neighborhoods_additional_inf
 
 
 class BlockModel(tf.keras.Model, ABC):
-    def __init__(self, blocks: List[Tuple[tf.keras.Model, tf.keras.Model]], final_layers: tf.keras.Model,
-                 threshold: float = 0.5, train_tile: float = 224, use_image_features: bool = True,
-                 use_distance: bool = False, original_lnms: bool = True):
+    def __init__(
+        self,
+        blocks: List[Tuple[tf.keras.Model, tf.keras.Model]],
+        final_layers: tf.keras.Model,
+        threshold: float = 0.5,
+        train_tile: float = 224,
+        use_image_features: bool = True,
+        use_distance: bool = False,
+        original_lnms: bool = True,
+    ):
         """
         Learning-NMS block model
 
@@ -31,7 +38,7 @@ class BlockModel(tf.keras.Model, ABC):
         original_lnms: bool
             reuse the learned representation for next block
         """
-        super(BlockModel, self).__init__(name='block_model')
+        super(BlockModel, self).__init__(name="block_model")
         self.blocks = blocks
         self.final_layers = final_layers
 
@@ -76,9 +83,9 @@ class BlockModel(tf.keras.Model, ABC):
         num_predictions = tf.shape(rpn_boxes_positive)[0]
         prediction_ids = tf.range(0, num_predictions)
 
-        neighborhood_sizes, neighborhoods_add_info, neighborhoods_indexes, self_indexes = \
-            all_neighborhoods_additional_info(rpn_boxes_positive, prediction_ids, self.train_tile, self.threshold,
-                                              self.use_distance)
+        neighborhood_sizes, neighborhoods_add_info, neighborhoods_indexes, self_indexes = all_neighborhoods_additional_info(
+            rpn_boxes_positive, prediction_ids, self.train_tile, self.threshold, self.use_distance
+        )
 
         if not self.use_image_features and not self.original_lnms:
             empty_features = tf.zeros((tf.shape(interpolated)[0], tf.shape(interpolated)[1] - 1))
@@ -90,19 +97,24 @@ class BlockModel(tf.keras.Model, ABC):
             # assemble neighborhood
             if self.use_image_features or self.original_lnms:
                 # assemble the neighboring prediction representation for each neighborhood
-                neighborhood = tf.reshape(tf.gather(interpolated, neighborhoods_indexes),
-                                          [-1, tf.shape(interpolated)[1]])
+                neighborhood = tf.reshape(
+                    tf.gather(interpolated, neighborhoods_indexes), [-1, tf.shape(interpolated)[1]]
+                )
                 # assemble the tiled prediction representation of the main prediction of each neighborhood
-                main_predictions = tf.reshape(tf.gather(interpolated, self_indexes), [-1, tf.shape(interpolated)[1]])
+                main_predictions = tf.reshape(
+                    tf.gather(interpolated, self_indexes), [-1, tf.shape(interpolated)[1]]
+                )
                 neighborhoods = tf.concat([neighborhood, main_predictions, neighborhoods_add_info], axis=1)
             else:
-                neighborhood = tf.reshape(tf.gather(interpolated[:, 0], neighborhoods_indexes),
-                                          [-1, 1])
-                main_predictions = tf.reshape(tf.gather(interpolated[:, 0], self_indexes),
-                                              [-1, 1])
-                empty_features = tf.zeros((tf.shape(neighborhoods_add_info)[0], tf.shape(interpolated)[1] - 1))
+                neighborhood = tf.reshape(tf.gather(interpolated[:, 0], neighborhoods_indexes), [-1, 1])
+                main_predictions = tf.reshape(tf.gather(interpolated[:, 0], self_indexes), [-1, 1])
+                empty_features = tf.zeros(
+                    (tf.shape(neighborhoods_add_info)[0], tf.shape(interpolated)[1] - 1)
+                )
                 neighborhoods = tf.concat(
-                    [neighborhood, empty_features, main_predictions, empty_features, neighborhoods_add_info], axis=1)
+                    [neighborhood, empty_features, main_predictions, empty_features, neighborhoods_add_info],
+                    axis=1,
+                )
             num_predictions = tf.size(neighborhood_sizes)
 
             # run block
@@ -116,8 +128,10 @@ class BlockModel(tf.keras.Model, ABC):
 
             # pool each neighborhood to one prediction representation
             for size in neighborhood_sizes:
-                neighborhood_slice = processed_neighborhoods[start_index:start_index + size]
-                pooled_predictions = pooled_predictions.write(counter, tf.math.reduce_max(neighborhood_slice, axis=0))
+                neighborhood_slice = processed_neighborhoods[start_index : start_index + size]
+                pooled_predictions = pooled_predictions.write(
+                    counter, tf.math.reduce_max(neighborhood_slice, axis=0)
+                )
 
                 counter += 1
                 start_index += size
@@ -129,5 +143,5 @@ class BlockModel(tf.keras.Model, ABC):
             block_output = tf.cast(processed_predictions, tf.float32)
 
             # skip connection
-            interpolated = (interpolated + block_output)
+            interpolated = interpolated + block_output
         return self.final_layers(interpolated, training=training)

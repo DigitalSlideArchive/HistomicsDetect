@@ -10,10 +10,10 @@ from .lnms import tf_linear_sum_assignment
 from .objectness import FalseNegativeRate, FalsePositiveRate
 
 __all__ = (
-    'AveragePrecision',
-    'iou',
-    'greedy_iou_mapping',
-    'tf_linear_sum_assignment',
-    'FalseNegativeRate',
-    'FalsePositiveRate'
+    "AveragePrecision",
+    "iou",
+    "greedy_iou_mapping",
+    "tf_linear_sum_assignment",
+    "FalseNegativeRate",
+    "FalsePositiveRate",
 )

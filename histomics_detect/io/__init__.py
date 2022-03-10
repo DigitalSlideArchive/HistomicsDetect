@@ -10,9 +10,4 @@ from .input import resize
 
 
 # list out things that are available for public use
-__all__ = (
-    'dataset',
-    'read_csv',
-    'read_png',
-    'resize'
-)
+__all__ = ("dataset", "read_csv", "read_png", "resize")

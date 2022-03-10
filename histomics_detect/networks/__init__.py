@@ -11,12 +11,11 @@ from .transfer_layers import transfer_layers
 
 # list out things that are available for public use
 __all__ = (
-
     # functions and classes of this package
-    'residual',
-    'pretrained',
-    'fast_rcnn',
-    'field_size',
-    'rpn',
-    'transfer_layers'
+    "residual",
+    "pretrained",
+    "fast_rcnn",
+    "field_size",
+    "rpn",
+    "transfer_layers",
 )

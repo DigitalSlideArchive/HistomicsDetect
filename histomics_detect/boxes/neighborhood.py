@@ -5,10 +5,15 @@ import tensorflow.keras.backend as kb
 from histomics_detect.metrics.iou import iou
 
 
-def assemble_single_neighborhood(anchor_id: int, interpolated: tf.Tensor, neighborhood_indeces: tf.Tensor,
-                                 neighborhood_additional_info: tf.Tensor, use_image_features: bool = True,
-                                 use_joint_features: bool = False, use_cross_feature: bool = False) \
-        -> tf.float32:
+def assemble_single_neighborhood(
+    anchor_id: int,
+    interpolated: tf.Tensor,
+    neighborhood_indeces: tf.Tensor,
+    neighborhood_additional_info: tf.Tensor,
+    use_image_features: bool = True,
+    use_joint_features: bool = False,
+    use_cross_feature: bool = False,
+) -> tf.float32:
     """
     DEPRECIATED: unused
 
@@ -37,7 +42,7 @@ def assemble_single_neighborhood(anchor_id: int, interpolated: tf.Tensor, neighb
     S: size of neighborhood
     N: number of predictions
     D: size of a single prediction
-    
+
     Parameters
     ----------
     use_joint_features: bool
@@ -66,15 +71,18 @@ def assemble_single_neighborhood(anchor_id: int, interpolated: tf.Tensor, neighb
     # collect image features
     if use_image_features:
         # TODO implement joint feature, and cross feature
-        neighborhood = tf.reshape(tf.gather(interpolated, neighborhood_indeces),
-                                  [tf.size(neighborhood_indeces), tf.shape(interpolated)[1]])
+        neighborhood = tf.reshape(
+            tf.gather(interpolated, neighborhood_indeces),
+            [tf.size(neighborhood_indeces), tf.shape(interpolated)[1]],
+        )
         tiled_pred = tf.tile(tf.expand_dims(interpolated[anchor_id], axis=0), (tf.shape(neighborhood)[0], 1))
     elif False:
         # TODO implement interpolate joint feature representation
         pass
     else:
-        neighborhood = tf.reshape(tf.gather(interpolated[:, 0], neighborhood_indeces),
-                                  [tf.size(neighborhood_indeces), 1])
+        neighborhood = tf.reshape(
+            tf.gather(interpolated[:, 0], neighborhood_indeces), [tf.size(neighborhood_indeces), 1]
+        )
         tiled_pred = tf.tile(tf.reshape(interpolated[anchor_id, 0], (1, 1)), (tf.shape(neighborhood)[0], 1))
 
     concatenated_neighborhood = tf.concat([neighborhood, tiled_pred, neighborhood_additional_info], axis=1)
@@ -82,9 +90,9 @@ def assemble_single_neighborhood(anchor_id: int, interpolated: tf.Tensor, neighb
     return concatenated_neighborhood
 
 
-def single_neighborhood_additional_info(anchor_id, ious, rpn_boxes_positive,
-                                        normalization_factor: float,
-                                        threshold: Union[float, tf.Tensor]):
+def single_neighborhood_additional_info(
+    anchor_id, ious, rpn_boxes_positive, normalization_factor: float, threshold: Union[float, tf.Tensor]
+):
     """
     assembles additional information of the neighborhood of a single prediction 'anchor_id'
     also assembles the neighborhood_indexes
@@ -141,20 +149,27 @@ def single_neighborhood_additional_info(anchor_id, ious, rpn_boxes_positive,
 
     # calculate additional information for the neighborhood
     collected_ious = tf.gather(ious[:, anchor_id], neighborhood_indexes)
-    distances = (neighborhood_boxes[:, :2] - rpn_boxes_positive[anchor_id, :2])
+    distances = neighborhood_boxes[:, :2] - rpn_boxes_positive[anchor_id, :2]
     normalized_distance = tf.abs(distances) / (normalization_factor + 1e-8)
-    l2_distance = tf.expand_dims(tf.reduce_sum(distances ** 2, axis=1) ** (1 / 2) / (normalization_factor + 1e-8),
-                                 axis=1)
+    l2_distance = tf.expand_dims(
+        tf.reduce_sum(distances ** 2, axis=1) ** (1 / 2) / (normalization_factor + 1e-8), axis=1
+    )
 
     # concatenate neighborhood vector representations
-    scale_difference = kb.log(kb.abs(neighborhood_boxes[:, 2:] / (rpn_boxes_positive[anchor_id, 2:] + 1e-8)) + 1e-8)
-    additional_info = tf.concat([collected_ious, normalized_distance,
-                                 l2_distance, scale_difference], axis=1)
+    scale_difference = kb.log(
+        kb.abs(neighborhood_boxes[:, 2:] / (rpn_boxes_positive[anchor_id, 2:] + 1e-8)) + 1e-8
+    )
+    additional_info = tf.concat([collected_ious, normalized_distance, l2_distance, scale_difference], axis=1)
     return additional_info, neighborhood_indexes
 
 
-def all_neighborhoods_additional_info(rpn_boxes_positive, prediction_ids, normalization_factor: float,
-                                      threshold: Union[float, tf.Tensor], use_distance: bool = False):
+def all_neighborhoods_additional_info(
+    rpn_boxes_positive,
+    prediction_ids,
+    normalization_factor: float,
+    threshold: Union[float, tf.Tensor],
+    use_distance: bool = False,
+):
     """
     collect additional info and indexes for all neighborhoods by running the method
     'single_neighborhood_additional_info' for each prediction and reformatting the collected data
@@ -205,17 +220,18 @@ def all_neighborhoods_additional_info(rpn_boxes_positive, prediction_ids, normal
 
     # calculate distance or ious
     if use_distance:
-        centroids = rpn_boxes_positive[:, :2] + rpn_boxes_positive[:, 2:]/2
-        dist_x = (tf.expand_dims(centroids[:, 0], axis=1) - tf.expand_dims(centroids[:, 0], axis=0))
-        dist_y = (tf.expand_dims(centroids[:, 1], axis=1) - tf.expand_dims(centroids[:, 1], axis=0))
-        ious = 1/(dist_x**2 + dist_y**2)
+        centroids = rpn_boxes_positive[:, :2] + rpn_boxes_positive[:, 2:] / 2
+        dist_x = tf.expand_dims(centroids[:, 0], axis=1) - tf.expand_dims(centroids[:, 0], axis=0)
+        dist_y = tf.expand_dims(centroids[:, 1], axis=1) - tf.expand_dims(centroids[:, 1], axis=0)
+        ious = 1 / (dist_x ** 2 + dist_y ** 2)
     else:
         ious = iou(rpn_boxes_positive, rpn_boxes_positive)
 
     # assemble initial information
     neighborhood_sizes = tf.TensorArray(tf.int32, size=tf.shape(rpn_boxes_positive)[0])
     neighborhoods_additional_info, neighborhoods_indexes = single_neighborhood_additional_info(
-        prediction_ids[0], ious, rpn_boxes_positive, normalization_factor, threshold)
+        prediction_ids[0], ious, rpn_boxes_positive, normalization_factor, threshold
+    )
 
     current_neighborhood_size = tf.shape(neighborhoods_additional_info)[0]
     neighborhood_sizes = neighborhood_sizes.write(0, current_neighborhood_size)
@@ -225,11 +241,15 @@ def all_neighborhoods_additional_info(rpn_boxes_positive, prediction_ids, normal
     # assemble neighborhoods for each prediction
     for x in prediction_ids[1:]:
         tf.autograph.experimental.set_loop_options(
-            shape_invariants=[(neighborhoods_additional_info, tf.TensorShape([None, None])),
-                              (neighborhoods_indexes, tf.TensorShape([None, None])),
-                              (self_indexes, tf.TensorShape([None, None]))])
+            shape_invariants=[
+                (neighborhoods_additional_info, tf.TensorShape([None, None])),
+                (neighborhoods_indexes, tf.TensorShape([None, None])),
+                (self_indexes, tf.TensorShape([None, None])),
+            ]
+        )
         new_neighborhood, new_indexes = single_neighborhood_additional_info(
-            x, ious, rpn_boxes_positive, normalization_factor, threshold)
+            x, ious, rpn_boxes_positive, normalization_factor, threshold
+        )
 
         current_neighborhood_size = tf.shape(new_neighborhood)[0]
         neighborhood_sizes = neighborhood_sizes.write(x, current_neighborhood_size)
@@ -237,8 +257,10 @@ def all_neighborhoods_additional_info(rpn_boxes_positive, prediction_ids, normal
         neighborhoods_additional_info = tf.concat([neighborhoods_additional_info, new_neighborhood], axis=0)
         neighborhoods_indexes = tf.concat([neighborhoods_indexes, new_indexes], axis=0)
 
-        current_self_indexes = tf.expand_dims(tf.tile(tf.expand_dims(x, axis=0), [current_neighborhood_size]), axis=1)
+        current_self_indexes = tf.expand_dims(
+            tf.tile(tf.expand_dims(x, axis=0), [current_neighborhood_size]), axis=1
+        )
         self_indexes = tf.concat([self_indexes, current_self_indexes], axis=0)
     neighborhood_sizes = neighborhood_sizes.stack()
 
-    return neighborhood_sizes, neighborhoods_additional_info, neighborhoods_indexes, self_indexes
+    return (neighborhood_sizes, neighborhoods_additional_info, neighborhoods_indexes, self_indexes)

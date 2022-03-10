@@ -5,11 +5,18 @@ from typing import List, Tuple
 from histomics_detect.metrics.iou import iou, greedy_iou_mapping
 
 
-def normal_loss(loss_object: tf.keras.losses.Loss, boxes: tf.Tensor, rpn_boxes_positive: tf.Tensor,
-                scores: tf.Tensor, positive_weight: float, standard: List[tf.keras.metrics.Metric] = [],
-                weighted_loss: bool = False, neg_pos_loss: bool = False, use_pos_neg_loss: bool = False,
-                min_iou: float = 0.18) \
-        -> Tuple[tf.Tensor, tf.Tensor]:
+def normal_loss(
+    loss_object: tf.keras.losses.Loss,
+    boxes: tf.Tensor,
+    rpn_boxes_positive: tf.Tensor,
+    scores: tf.Tensor,
+    positive_weight: float,
+    standard: List[tf.keras.metrics.Metric] = [],
+    weighted_loss: bool = False,
+    neg_pos_loss: bool = False,
+    use_pos_neg_loss: bool = False,
+    min_iou: float = 0.18,
+) -> Tuple[tf.Tensor, tf.Tensor]:
     """
     calculates the normal loss of a lnms output
 
@@ -63,8 +70,9 @@ def normal_loss(loss_object: tf.keras.losses.Loss, boxes: tf.Tensor, rpn_boxes_p
 
     # calculate negative and positive labels loss for comparing experiment
     if neg_pos_loss:
-        (pos_loss, neg_loss), (positive_labels, negative_labels) = _pos_neg_loss_calculation(scores, labels,
-                                                                                             loss_object, standard)
+        (pos_loss, neg_loss), (positive_labels, negative_labels) = _pos_neg_loss_calculation(
+            scores, labels, loss_object, standard
+        )
         # use negative or positive for training model
         if use_pos_neg_loss:
             return pos_loss * positive_weight + neg_loss, indexes
@@ -83,10 +91,17 @@ def normal_loss(loss_object: tf.keras.losses.Loss, boxes: tf.Tensor, rpn_boxes_p
     return tf.reduce_sum(loss), indexes
 
 
-def paper_loss(boxes: tf.Tensor, rpn_boxes_positive: tf.Tensor, nms_output: tf.Tensor,
-               loss_object: tf.keras.losses.Loss, positive_weight: float, standard: List[tf.keras.metrics.Metric],
-               weighted_loss: bool = False, neg_pos_loss: bool = False, min_iou: float = 0.18) \
-        -> Tuple[tf.Tensor, tf.Tensor]:
+def paper_loss(
+    boxes: tf.Tensor,
+    rpn_boxes_positive: tf.Tensor,
+    nms_output: tf.Tensor,
+    loss_object: tf.keras.losses.Loss,
+    positive_weight: float,
+    standard: List[tf.keras.metrics.Metric],
+    weighted_loss: bool = False,
+    neg_pos_loss: bool = False,
+    min_iou: float = 0.18,
+) -> Tuple[tf.Tensor, tf.Tensor]:
     """
     loss calculation of the paper "Learning Non-Max Suppression"
 
@@ -139,7 +154,9 @@ def paper_loss(boxes: tf.Tensor, rpn_boxes_positive: tf.Tensor, nms_output: tf.T
 
     # calculate pos and neg loss
     if weighted_loss or neg_pos_loss:
-        _, (positive_labels, negative_labels) = _pos_neg_loss_calculation(nms_output, labels, loss_object, standard)
+        _, (positive_labels, negative_labels) = _pos_neg_loss_calculation(
+            nms_output, labels, loss_object, standard
+        )
 
     if weighted_loss:
         num_pos = tf.cast(tf.size(positive_labels), tf.float32)
@@ -150,7 +167,7 @@ def paper_loss(boxes: tf.Tensor, rpn_boxes_positive: tf.Tensor, nms_output: tf.T
         weight = tf.ones(tf.shape(nms_output))
 
     # reformat labels and output from 0, 1 space to -1, 1 space
-    labels = (2 * labels - 1)
+    labels = 2 * labels - 1
     nms_output = (2 * nms_output) - 1
 
     # calculate loss
@@ -214,9 +231,12 @@ def calculate_labels(boxes, rpn_boxes_positive, output_shape, min_iou: float = 0
     return labels, indexes
 
 
-def _pos_neg_loss_calculation(nms_output: tf.Tensor, labels: tf.Tensor, loss_object: tf.keras.losses.Loss,
-                              standard: List[tf.keras.metrics.Metric]) \
-        -> Tuple[Tuple[tf.Tensor, tf.Tensor], Tuple[tf.Tensor, tf.Tensor]]:
+def _pos_neg_loss_calculation(
+    nms_output: tf.Tensor,
+    labels: tf.Tensor,
+    loss_object: tf.keras.losses.Loss,
+    standard: List[tf.keras.metrics.Metric],
+) -> Tuple[Tuple[tf.Tensor, tf.Tensor], Tuple[tf.Tensor, tf.Tensor]]:
     """
 
     S: size of neighborhood
@@ -251,7 +271,9 @@ def _pos_neg_loss_calculation(nms_output: tf.Tensor, labels: tf.Tensor, loss_obj
 
     """
 
-    positive_predictions, negative_predictions = tf.dynamic_partition(nms_output, tf.cast(labels == 0, tf.int32), 2)
+    positive_predictions, negative_predictions = tf.dynamic_partition(
+        nms_output, tf.cast(labels == 0, tf.int32), 2
+    )
     positive_labels = tf.ones(tf.shape(positive_predictions))
     negative_labels = tf.zeros(tf.shape(negative_predictions))
 
@@ -259,7 +281,9 @@ def _pos_neg_loss_calculation(nms_output: tf.Tensor, labels: tf.Tensor, loss_obj
     pos_loss = tf.reduce_sum(loss_object(positive_predictions, positive_labels))
     neg_loss = tf.reduce_sum(loss_object(negative_predictions, negative_labels))
 
-    zero_func = lambda: 0.0
+    def zero_func():
+        return 0.0
+
     pos_loss = tf.cond(tf.size(positive_labels) > 0, lambda: pos_loss, zero_func)
     neg_loss = tf.cond(tf.size(negative_labels) > 0, lambda: neg_loss, zero_func)
 
@@ -299,23 +323,34 @@ def cluster_labels_indexes(scores, cluster_assignment) -> Tuple[tf.Tensor, tf.Te
     def max_cluster_index_func(i) -> tf.int32:
         index = tf.cast(i, tf.int32)
         max_index = tf.argmax(
-            tf.multiply(tf.cast(scores, tf.float32),
-                        tf.cast(tf.equal(cluster_assignment, tf.cast(index, tf.int32)),
-                                tf.float32)))
+            tf.multiply(
+                tf.cast(scores, tf.float32),
+                tf.cast(tf.equal(cluster_assignment, tf.cast(index, tf.int32)), tf.float32),
+            )
+        )
         return tf.cast(max_index, tf.int32)
 
-    indexes = tf.map_fn(lambda x: max_cluster_index_func(x), tf.range(0, tf.reduce_max(cluster_assignment) + 1))
+    indexes = tf.map_fn(
+        lambda x: max_cluster_index_func(x), tf.range(0, tf.reduce_max(cluster_assignment) + 1)
+    )
 
     labels = tf.scatter_nd(indexes, tf.ones(tf.shape(indexes)), tf.shape(scores))
 
     return labels, indexes
 
 
-def clustering_loss(nms_output: tf.Tensor, cluster_assignment: tf.Tensor, loss_object: tf.keras.losses.Loss,
-                    positive_weight: float, standard: List[tf.keras.metrics.Metric], boxes: tf.Tensor,
-                    rpn_positive: tf.Tensor, weighted_loss: bool = False, neg_pos_loss: bool = False,
-                    add_regression_param: int = 0) \
-        -> Tuple[tf.Tensor, tf.Tensor]:
+def clustering_loss(
+    nms_output: tf.Tensor,
+    cluster_assignment: tf.Tensor,
+    loss_object: tf.keras.losses.Loss,
+    positive_weight: float,
+    standard: List[tf.keras.metrics.Metric],
+    boxes: tf.Tensor,
+    rpn_positive: tf.Tensor,
+    weighted_loss: bool = False,
+    neg_pos_loss: bool = False,
+    add_regression_param: int = 0,
+) -> Tuple[tf.Tensor, tf.Tensor]:
     """
     clustering loss calculation
 
@@ -380,22 +415,30 @@ def clustering_loss(nms_output: tf.Tensor, cluster_assignment: tf.Tensor, loss_o
         weight = tf.ones(tf.shape(scores))
 
     if add_regression_param > 0:
-        reg = nms_output[:, 1:add_regression_param * 2 + 1]
+        reg = nms_output[:, 1 : add_regression_param * 2 + 1]
 
         def pos_prediction_dist_func(i) -> tf.float32:
             index = tf.cast(i, tf.int32)
-            cluster_scores = tf.multiply(tf.cast(scores, tf.float32),
-                                         tf.cast(tf.equal(cluster_assignment, tf.cast(index, tf.int32)),
-                                                 tf.float32))
+            cluster_scores = tf.multiply(
+                tf.cast(scores, tf.float32),
+                tf.cast(tf.equal(cluster_assignment, tf.cast(index, tf.int32)), tf.float32),
+            )
             max_index = tf.cast(tf.argmax(cluster_scores), tf.int32)[0]
 
             dist = tf.math.sigmoid(
-                (boxes[index, :add_regression_param * 2] - rpn_positive[max_index, :add_regression_param * 2]) / 100)
+                (
+                    boxes[index, : add_regression_param * 2]
+                    - rpn_positive[max_index, : add_regression_param * 2]
+                )
+                / 100
+            )
 
             return tf.cast(dist, tf.float32)
 
-        distances = tf.map_fn(lambda x: pos_prediction_dist_func(x),
-                              tf.cast(tf.range(0, tf.reduce_max(cluster_assignment) + 1), tf.float32))
+        distances = tf.map_fn(
+            lambda x: pos_prediction_dist_func(x),
+            tf.cast(tf.range(0, tf.reduce_max(cluster_assignment) + 1), tf.float32),
+        )
 
         distance_vector = tf.scatter_nd(indeces, distances, tf.shape(reg))
 
@@ -408,11 +451,21 @@ def clustering_loss(nms_output: tf.Tensor, cluster_assignment: tf.Tensor, loss_o
         return tf.reduce_sum(loss), labels
 
 
-def normal_clustering_loss(nms_output: tf.Tensor, boxes: tf.Tensor, rpn_boxes_positive: tf.Tensor,
-                           cluster_assignment: tf.Tensor, loss_object: tf.keras.losses.Loss,
-                           positive_weight: float, standard: List[tf.keras.metrics.Metric], weighted_loss: bool = False,
-                           neg_pos_loss: bool = False, use_pos_neg_loss: bool = False, norm_loss_weight: float = 1,
-                           add_regression_param: int = 0, min_iou: float = 0.18) -> Tuple[float, tf.Tensor]:
+def normal_clustering_loss(
+    nms_output: tf.Tensor,
+    boxes: tf.Tensor,
+    rpn_boxes_positive: tf.Tensor,
+    cluster_assignment: tf.Tensor,
+    loss_object: tf.keras.losses.Loss,
+    positive_weight: float,
+    standard: List[tf.keras.metrics.Metric],
+    weighted_loss: bool = False,
+    neg_pos_loss: bool = False,
+    use_pos_neg_loss: bool = False,
+    norm_loss_weight: float = 1,
+    add_regression_param: int = 0,
+    min_iou: float = 0.18,
+) -> Tuple[float, tf.Tensor]:
     """
     a combination between the normal and clustering loss
 
@@ -465,10 +518,30 @@ def normal_clustering_loss(nms_output: tf.Tensor, boxes: tf.Tensor, rpn_boxes_po
         indexes of the values that correspond to positive anchors
     """
     scores = tf.expand_dims(nms_output[:, 0], axis=1)
-    norm_loss, indexes = normal_loss(loss_object, boxes, rpn_boxes_positive, scores, positive_weight, standard,
-                                     weighted_loss, neg_pos_loss, use_pos_neg_loss, min_iou)
-    clust_loss, _ = clustering_loss(nms_output, cluster_assignment, loss_object, positive_weight, standard, boxes,
-                                    rpn_boxes_positive, weighted_loss, neg_pos_loss, add_regression_param)
+    norm_loss, indexes = normal_loss(
+        loss_object,
+        boxes,
+        rpn_boxes_positive,
+        scores,
+        positive_weight,
+        standard,
+        weighted_loss,
+        neg_pos_loss,
+        use_pos_neg_loss,
+        min_iou,
+    )
+    clust_loss, _ = clustering_loss(
+        nms_output,
+        cluster_assignment,
+        loss_object,
+        positive_weight,
+        standard,
+        boxes,
+        rpn_boxes_positive,
+        weighted_loss,
+        neg_pos_loss,
+        add_regression_param,
+    )
 
     loss = norm_loss_weight * norm_loss + clust_loss
 
@@ -516,7 +589,9 @@ def xor_loss(nms_output: tf.Tensor, cluster_assignment: tf.Tensor):
         indexes = tf.cast(pred_indexes, tf.int64)
         update_shape = tf.cast(tf.shape(cluster_assignment), tf.int64)
 
-        false_fn = lambda: tf.scatter_nd(indexes, tf.ones(tf.shape(indexes)[0]) * sum_req, update_shape)
+        def false_fn():
+            return tf.scatter_nd(indexes, tf.ones(tf.shape(indexes)[0]) * sum_req, update_shape)
+
         scattered_sum = tf.cond(tf.size(indexes) == 0, lambda: tf.zeros(update_shape), false_fn)
         return tf.squeeze(scattered_sum)
 

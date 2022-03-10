@@ -9,9 +9,8 @@ from .sampling import sample_anchors
 
 # list out things that are available for public use
 __all__ = (
-
     # functions and classes of this package
-    'create_anchors',
-    'filter_anchors',
-    'sample_anchors'
+    "create_anchors",
+    "filter_anchors",
+    "sample_anchors",
 )
