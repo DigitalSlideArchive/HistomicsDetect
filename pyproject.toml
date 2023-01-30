@@ -24,7 +24,7 @@ dependencies = [
     "pooch",
     "pyyaml",
     "scipy",
-    "tensorflow-gpu>=2.4",
+    "tensorflow>=2.4",
 ]
 dynamic = ["version", "description"]
 
